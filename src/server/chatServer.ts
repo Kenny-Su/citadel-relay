@@ -10,9 +10,25 @@ import {
   type SendMessagePayload,
   type User
 } from '../shared/chat.js';
+import { createSqliteMessageStore, type MessageStore } from './messageStore.js';
 import { validateDisplayName, validateMessageBody } from './validation.js';
 
-export function createChatServer(clientOrigin = 'http://localhost:5173') {
+export type ChatServerOptions = {
+  clientOrigin?: string;
+  messageStore?: MessageStore;
+};
+
+const DEFAULT_DB_PATH = 'data/chat.sqlite';
+
+export function createChatServer(options: ChatServerOptions | string = {}) {
+  const clientOrigin =
+    typeof options === 'string' ? options : (options.clientOrigin ?? 'http://localhost:5173');
+  const messageStore =
+    typeof options === 'string'
+      ? createSqliteMessageStore(process.env.CHAT_DB_PATH ?? DEFAULT_DB_PATH)
+      : (options.messageStore ??
+        createSqliteMessageStore(process.env.CHAT_DB_PATH ?? DEFAULT_DB_PATH));
+
   const app = express();
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
@@ -23,28 +39,19 @@ export function createChatServer(clientOrigin = 'http://localhost:5173') {
   });
 
   const users = new Map<string, User>();
-  const messages: ChatMessage[] = [];
 
   function getRoomState(): RoomState {
     return {
       users: [...users.values()].sort((a, b) => a.name.localeCompare(b.name)),
-      messages
+      messages: messageStore.listRecentMessages(MESSAGE_HISTORY_LIMIT)
     };
-  }
-
-  function rememberMessage(message: ChatMessage) {
-    messages.push(message);
-
-    if (messages.length > MESSAGE_HISTORY_LIMIT) {
-      messages.splice(0, messages.length - MESSAGE_HISTORY_LIMIT);
-    }
   }
 
   app.get('/health', (_request, response) => {
     response.json({
       ok: true,
       users: users.size,
-      messages: messages.length
+      messages: messageStore.countMessages()
     });
   });
 
@@ -100,7 +107,7 @@ export function createChatServer(clientOrigin = 'http://localhost:5173') {
         createdAt: new Date().toISOString()
       };
 
-      rememberMessage(message);
+      messageStore.saveMessage(message);
       io.emit('message:new', message);
     });
 
@@ -122,5 +129,5 @@ export function createChatServer(clientOrigin = 'http://localhost:5173') {
     });
   });
 
-  return { app, httpServer, io };
+  return { app, httpServer, io, messageStore };
 }
