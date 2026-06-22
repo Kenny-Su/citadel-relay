@@ -4,8 +4,10 @@ import { nanoid } from 'nanoid';
 import { Server } from 'socket.io';
 import {
   type ChatMessage,
+  DEFAULT_ROOM_ID,
   type JoinPayload,
   MESSAGE_HISTORY_LIMIT,
+  normalizeRoomId,
   type RoomState,
   type SendMessagePayload,
   type User
@@ -19,6 +21,11 @@ export type ChatServerOptions = {
 };
 
 const DEFAULT_DB_PATH = 'data/chat.sqlite';
+
+type UserSession = {
+  roomId: string;
+  user: User;
+};
 
 export function createChatServer(options: ChatServerOptions | string = {}) {
   const clientOrigin =
@@ -38,56 +45,73 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
     }
   });
 
-  const users = new Map<string, User>();
+  const sessions = new Map<string, UserSession>();
 
-  function getRoomState(): RoomState {
+  function getRoomState(roomId: string): RoomState {
     return {
-      users: [...users.values()].sort((a, b) => a.name.localeCompare(b.name)),
-      messages: messageStore.listRecentMessages(MESSAGE_HISTORY_LIMIT)
+      roomId,
+      users: [...sessions.values()]
+        .filter((session) => session.roomId === roomId)
+        .map((session) => session.user)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      messages: messageStore.listRecentMessages(roomId, MESSAGE_HISTORY_LIMIT)
     };
   }
 
   app.get('/health', (_request, response) => {
     response.json({
       ok: true,
-      users: users.size,
+      users: sessions.size,
       messages: messageStore.countMessages()
     });
   });
 
   io.on('connection', (socket) => {
-    socket.emit('room:state', getRoomState());
+    socket.emit('room:state', getRoomState(DEFAULT_ROOM_ID));
 
     socket.on('join', (payload: JoinPayload = { name: '' }) => {
       const result = validateDisplayName(payload.name);
+      const roomId = normalizeRoomId(payload.roomId);
 
       if (!result.ok) {
         socket.emit('error:notice', { message: result.error });
         return;
       }
 
-      const previousUser = users.get(socket.id);
+      const previousSession = sessions.get(socket.id);
       const user: User = { id: socket.id, name: result.value };
-      users.set(socket.id, user);
+      sessions.set(socket.id, { roomId, user });
 
-      socket.emit('room:state', getRoomState());
+      if (previousSession && previousSession.roomId !== roomId) {
+        socket.leave(previousSession.roomId);
+        socket.to(previousSession.roomId).emit('user:left', {
+          id: nanoid(),
+          type: 'user:left',
+          user: previousSession.user,
+          createdAt: new Date().toISOString()
+        });
+        io.to(previousSession.roomId).emit('room:state', getRoomState(previousSession.roomId));
+      }
 
-      if (!previousUser) {
-        socket.broadcast.emit('user:joined', {
+      socket.join(roomId);
+      socket.emit('room:state', getRoomState(roomId));
+
+      if (!previousSession || previousSession.roomId !== roomId) {
+        socket.to(roomId).emit('user:joined', {
           id: nanoid(),
           type: 'user:joined',
           user,
           createdAt: new Date().toISOString()
         });
       } else {
-        io.emit('room:state', getRoomState());
+        io.to(roomId).emit('room:state', getRoomState(roomId));
       }
     });
 
     socket.on('message:send', (payload: SendMessagePayload = { body: '' }) => {
-      const user = users.get(socket.id);
+      const session = sessions.get(socket.id);
 
-      if (!user) {
+      if (!session) {
         socket.emit('error:notice', { message: 'Join the room before sending messages.' });
         return;
       }
@@ -101,31 +125,32 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
 
       const message: ChatMessage = {
         id: nanoid(),
-        userId: user.id,
-        userName: user.name,
+        roomId: session.roomId,
+        userId: session.user.id,
+        userName: session.user.name,
         body: result.value,
         createdAt: new Date().toISOString()
       };
 
       messageStore.saveMessage(message);
-      io.emit('message:new', message);
+      io.to(session.roomId).emit('message:new', message);
     });
 
     socket.on('disconnect', () => {
-      const user = users.get(socket.id);
+      const session = sessions.get(socket.id);
 
-      if (!user) {
+      if (!session) {
         return;
       }
 
-      users.delete(socket.id);
-      socket.broadcast.emit('user:left', {
+      sessions.delete(socket.id);
+      socket.to(session.roomId).emit('user:left', {
         id: nanoid(),
         type: 'user:left',
-        user,
+        user: session.user,
         createdAt: new Date().toISOString()
       });
-      io.emit('room:state', getRoomState());
+      io.to(session.roomId).emit('room:state', getRoomState(session.roomId));
     });
   });
 

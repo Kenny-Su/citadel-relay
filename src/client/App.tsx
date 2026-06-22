@@ -1,7 +1,9 @@
 import React from 'react';
 import { io } from 'socket.io-client';
 import {
+  DEFAULT_ROOM_ID,
   MESSAGE_MAX_LENGTH,
+  normalizeRoomId,
   type ChatMessage,
   type RoomState,
   type ServerErrorPayload,
@@ -14,6 +16,30 @@ const socket = io({
   autoConnect: false
 });
 
+function getRoomIdFromPath() {
+  const [, roomsSegment, roomSegment] = window.location.pathname.split('/');
+
+  if (roomsSegment !== 'rooms') {
+    return DEFAULT_ROOM_ID;
+  }
+
+  return normalizeRoomId(roomSegment);
+}
+
+function getRoomPath(roomId: string) {
+  return `/rooms/${roomId}`;
+}
+
+function syncRoomPath(roomId: string, mode: 'push' | 'replace' = 'push') {
+  const path = getRoomPath(roomId);
+
+  if (window.location.pathname === path) {
+    return;
+  }
+
+  window.history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', path);
+}
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
@@ -22,6 +48,8 @@ function formatTime(value: string) {
 }
 
 export function App() {
+  const [roomId, setRoomId] = React.useState(getRoomIdFromPath);
+  const [roomDraft, setRoomDraft] = React.useState(getRoomIdFromPath);
   const [displayName, setDisplayName] = React.useState('');
   const [joinedName, setJoinedName] = React.useState('');
   const [messageDraft, setMessageDraft] = React.useState('');
@@ -33,12 +61,37 @@ export function App() {
   const stickToBottomRef = React.useRef(true);
 
   React.useEffect(() => {
+    syncRoomPath(roomId, 'replace');
+
+    function handlePopState() {
+      setRoomId(getRoomIdFromPath());
+    }
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    setRoomDraft(roomId);
+    setUsers([]);
+    setTimeline([]);
+    stickToBottomRef.current = true;
+
+    if (joinedName && socket.connected) {
+      socket.emit('join', { name: joinedName, roomId });
+    }
+  }, [joinedName, roomId]);
+
+  React.useEffect(() => {
     function handleConnect() {
       setConnected(true);
       setNotice('');
 
       if (joinedName) {
-        socket.emit('join', { name: joinedName });
+        socket.emit('join', { name: joinedName, roomId });
       }
     }
 
@@ -48,6 +101,10 @@ export function App() {
     }
 
     function handleRoomState(state: RoomState) {
+      if (state.roomId !== roomId) {
+        return;
+      }
+
       setUsers(state.users);
       setTimeline((current) => {
         const systemItems = current.filter((item) => item.kind === 'system');
@@ -59,6 +116,10 @@ export function App() {
     }
 
     function handleNewMessage(message: ChatMessage) {
+      if (message.roomId !== roomId) {
+        return;
+      }
+
       setTimeline((current) => [...current, { kind: 'message', ...message }]);
     }
 
@@ -87,7 +148,7 @@ export function App() {
       socket.off('user:left', handleSystemEvent);
       socket.off('error:notice', handleError);
     };
-  }, [joinedName]);
+  }, [joinedName, roomId]);
 
   React.useEffect(() => {
     if (!stickToBottomRef.current) {
@@ -116,7 +177,16 @@ export function App() {
       socket.connect();
     }
 
-    socket.emit('join', { name });
+    socket.emit('join', { name, roomId });
+  }
+
+  function switchRoom(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextRoomId = normalizeRoomId(roomDraft);
+
+    setNotice('');
+    setRoomId(nextRoomId);
+    syncRoomPath(nextRoomId);
   }
 
   function sendMessage(event: React.FormEvent<HTMLFormElement>) {
@@ -152,12 +222,28 @@ export function App() {
       <section className="chat-panel" aria-label="Chat room">
         <header className="chat-header">
           <div>
-            <p className="eyebrow">Public room</p>
+            <p className="eyebrow">Room</p>
             <h1>Citadel Chat</h1>
+            <p className="room-label">#{roomId}</p>
           </div>
-          <div className={connected ? 'status online' : 'status'}>
-            <span aria-hidden="true" />
-            {connected ? 'Online' : 'Offline'}
+          <div className="header-actions">
+            <form className="room-switcher" onSubmit={switchRoom}>
+              <label className="sr-only" htmlFor="roomName">
+                Room name
+              </label>
+              <input
+                id="roomName"
+                value={roomDraft}
+                maxLength={32}
+                onChange={(event) => setRoomDraft(event.target.value)}
+                placeholder="general"
+              />
+              <button type="submit">Go</button>
+            </form>
+            <div className={connected ? 'status online' : 'status'}>
+              <span aria-hidden="true" />
+              {connected ? 'Online' : 'Offline'}
+            </div>
           </div>
         </header>
 

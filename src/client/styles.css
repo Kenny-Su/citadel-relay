@@ -68,6 +68,40 @@ button:disabled {
   padding: 22px 24px;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.room-label {
+  color: #315c50;
+  font-weight: 800;
+  margin: 5px 0 0;
+}
+
+.room-switcher {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(120px, 180px) auto;
+}
+
+.room-switcher input {
+  min-height: 44px;
+}
+
+.sr-only {
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .eyebrow {
   color: #66756c;
   font-size: 0.78rem;
@@ -316,7 +350,18 @@ textarea:focus {
   }
 
   .chat-header {
+    align-items: stretch;
+    flex-direction: column;
     padding: 18px;
+  }
+
+  .header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .room-switcher {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .message-list,

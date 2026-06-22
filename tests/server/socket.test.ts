@@ -14,6 +14,12 @@ function once<T>(socket: Socket, event: string) {
   });
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 describe('chat socket', () => {
   let server: ReturnType<typeof createChatServer>;
   let tempDir: string;
@@ -52,23 +58,32 @@ describe('chat socket', () => {
     return client;
   }
 
+  async function joinClient(client: Socket, name: string, roomId: string) {
+    const roomState = once<RoomState>(client, 'room:state');
+    client.emit('join', { name, roomId });
+    return roomState;
+  }
+
   it('joins users, broadcasts messages, and updates presence on disconnect', async () => {
     const ada = await connectClient();
     const grace = await connectClient();
 
-    ada.emit('join', { name: 'Ada' });
-    await once<RoomState>(ada, 'room:state');
+    await joinClient(ada, 'Ada', 'general');
 
     const adaSawJoin = once<SystemEvent>(ada, 'user:joined');
-    grace.emit('join', { name: 'Grace' });
+    await joinClient(grace, 'Grace', 'general');
     expect((await adaSawJoin).user.name).toBe('Grace');
 
     const messageForAda = once<ChatMessage>(ada, 'message:new');
     const messageForGrace = once<ChatMessage>(grace, 'message:new');
     ada.emit('message:send', { body: '  hello  ' });
 
-    expect(await messageForAda).toMatchObject({ userName: 'Ada', body: 'hello' });
-    expect(await messageForGrace).toMatchObject({ userName: 'Ada', body: 'hello' });
+    expect(await messageForAda).toMatchObject({ roomId: 'general', userName: 'Ada', body: 'hello' });
+    expect(await messageForGrace).toMatchObject({
+      roomId: 'general',
+      userName: 'Ada',
+      body: 'hello'
+    });
 
     const graceSawLeave = once<SystemEvent>(grace, 'user:left');
     ada.close();
@@ -77,8 +92,7 @@ describe('chat socket', () => {
 
   it('loads persisted messages into room state after a server restart', async () => {
     const ada = await connectClient();
-    ada.emit('join', { name: 'Ada' });
-    await once<RoomState>(ada, 'room:state');
+    await joinClient(ada, 'Ada', 'design');
 
     const sentMessage = once<ChatMessage>(ada, 'message:new');
     ada.emit('message:send', { body: 'still here after restart' });
@@ -102,15 +116,58 @@ describe('chat socket', () => {
     url = `http://127.0.0.1:${address.port}`;
 
     const grace = await connectClient();
-    const state = await new Promise<RoomState>((resolve) => {
-      grace.once('room:state', resolve);
-      grace.emit('join', { name: 'Grace' });
-    });
+    const state = await joinClient(grace, 'Grace', 'design');
 
+    expect(state.roomId).toBe('design');
     expect(state.messages).toHaveLength(1);
     expect(state.messages[0]).toMatchObject({
+      roomId: 'design',
       userName: 'Ada',
       body: 'still here after restart'
     });
+  });
+
+  it('isolates messages and presence between rooms', async () => {
+    const ada = await connectClient();
+    const grace = await connectClient();
+
+    await joinClient(ada, 'Ada', 'general');
+    await joinClient(grace, 'Grace', 'design');
+
+    let graceReceivedMessage = false;
+    let graceReceivedJoin = false;
+    grace.once('message:new', () => {
+      graceReceivedMessage = true;
+    });
+    grace.once('user:joined', () => {
+      graceReceivedJoin = true;
+    });
+
+    const messageForAda = once<ChatMessage>(ada, 'message:new');
+    ada.emit('message:send', { body: 'general only' });
+
+    expect(await messageForAda).toMatchObject({ roomId: 'general', body: 'general only' });
+    await wait(40);
+    expect(graceReceivedMessage).toBe(false);
+    expect(graceReceivedJoin).toBe(false);
+  });
+
+  it('updates old and new room presence when switching rooms', async () => {
+    const ada = await connectClient();
+    const grace = await connectClient();
+
+    await joinClient(ada, 'Ada', 'general');
+    await joinClient(grace, 'Grace', 'general');
+
+    const graceSawLeave = once<SystemEvent>(grace, 'user:left');
+    const graceSawState = once<RoomState>(grace, 'room:state');
+    ada.emit('join', { name: 'Ada', roomId: 'design' });
+    expect((await graceSawLeave).user.name).toBe('Ada');
+    const generalState = await graceSawState;
+    expect(generalState.users.map((user) => user.name)).toEqual(['Grace']);
+
+    const adaState = await joinClient(ada, 'Ada', 'design');
+    expect(adaState.roomId).toBe('design');
+    expect(adaState.users.map((user) => user.name)).toEqual(['Ada']);
   });
 });
