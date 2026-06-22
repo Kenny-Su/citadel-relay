@@ -175,6 +175,28 @@ h2 {
   gap: 10px;
 }
 
+.identity-bar {
+  align-items: center;
+  background: #f4f7f5;
+  border-bottom: 1px solid #e4e8e5;
+  color: #4e5c54;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 24px;
+}
+
+.identity-bar strong {
+  color: #1f2a24;
+}
+
+.identity-bar button {
+  background: #e1e8e4;
+  color: #244238;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 input,
 textarea {
   background: #ffffff;
@@ -366,6 +388,7 @@ textarea:focus {
 
   .message-list,
   .composer,
+  .identity-bar,
   .notice {
     padding-left: 18px;
     padding-right: 18px;

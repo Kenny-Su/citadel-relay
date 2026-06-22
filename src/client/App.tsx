@@ -2,6 +2,7 @@ import React from 'react';
 import { io } from 'socket.io-client';
 import {
   DEFAULT_ROOM_ID,
+  DISPLAY_NAME_MAX_LENGTH,
   MESSAGE_MAX_LENGTH,
   normalizeRoomId,
   type ChatMessage,
@@ -15,6 +16,8 @@ import {
 const socket = io({
   autoConnect: false
 });
+
+const DISPLAY_NAME_STORAGE_KEY = 'citadel.displayName';
 
 function getRoomIdFromPath() {
   const [, roomsSegment, roomSegment] = window.location.pathname.split('/');
@@ -47,11 +50,57 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function normalizeDisplayName(input: unknown) {
+  if (typeof input !== 'string') {
+    return null;
+  }
+
+  const value = input.trim().replace(/\s+/g, ' ');
+
+  if (!value || value.length > DISPLAY_NAME_MAX_LENGTH) {
+    return null;
+  }
+
+  return value;
+}
+
+function loadStoredDisplayName() {
+  try {
+    const value = normalizeDisplayName(window.localStorage.getItem(DISPLAY_NAME_STORAGE_KEY));
+
+    if (!value) {
+      window.localStorage.removeItem(DISPLAY_NAME_STORAGE_KEY);
+      return '';
+    }
+
+    return value;
+  } catch {
+    return '';
+  }
+}
+
+function saveStoredDisplayName(name: string) {
+  try {
+    window.localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, name);
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function clearStoredDisplayName() {
+  try {
+    window.localStorage.removeItem(DISPLAY_NAME_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
 export function App() {
+  const initialDisplayName = React.useMemo(() => loadStoredDisplayName(), []);
   const [roomId, setRoomId] = React.useState(getRoomIdFromPath);
   const [roomDraft, setRoomDraft] = React.useState(getRoomIdFromPath);
-  const [displayName, setDisplayName] = React.useState('');
-  const [joinedName, setJoinedName] = React.useState('');
+  const [displayName, setDisplayName] = React.useState(initialDisplayName);
+  const [joinedName, setJoinedName] = React.useState(initialDisplayName);
   const [messageDraft, setMessageDraft] = React.useState('');
   const [connected, setConnected] = React.useState(false);
   const [users, setUsers] = React.useState<User[]>([]);
@@ -79,20 +128,12 @@ export function App() {
     setUsers([]);
     setTimeline([]);
     stickToBottomRef.current = true;
-
-    if (joinedName && socket.connected) {
-      socket.emit('join', { name: joinedName, roomId });
-    }
-  }, [joinedName, roomId]);
+  }, [roomId]);
 
   React.useEffect(() => {
     function handleConnect() {
       setConnected(true);
       setNotice('');
-
-      if (joinedName) {
-        socket.emit('join', { name: joinedName, roomId });
-      }
     }
 
     function handleDisconnect() {
@@ -151,11 +192,28 @@ export function App() {
   }, [joinedName, roomId]);
 
   React.useEffect(() => {
+    if (!joinedName) {
+      return;
+    }
+
+    if (!socket.connected) {
+      socket.connect();
+      return;
+    }
+
+    socket.emit('join', { name: joinedName, roomId });
+  }, [connected, joinedName, roomId]);
+
+  React.useEffect(() => {
     if (!stickToBottomRef.current) {
       return;
     }
 
-    listRef.current?.scrollTo({
+    if (typeof listRef.current?.scrollTo !== 'function') {
+      return;
+    }
+
+    listRef.current.scrollTo({
       top: listRef.current.scrollHeight,
       behavior: 'smooth'
     });
@@ -163,21 +221,29 @@ export function App() {
 
   function joinRoom(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = displayName.trim().replace(/\s+/g, ' ');
+    const name = normalizeDisplayName(displayName);
 
     if (!name) {
       setNotice('Enter a display name.');
       return;
     }
 
+    setDisplayName(name);
     setJoinedName(name);
+    saveStoredDisplayName(name);
     setNotice('');
+  }
 
-    if (!socket.connected) {
-      socket.connect();
-    }
+  function changeIdentity() {
+    const previousName = joinedName;
 
-    socket.emit('join', { name, roomId });
+    clearStoredDisplayName();
+    setJoinedName('');
+    setDisplayName(previousName);
+    setUsers([]);
+    setTimeline([]);
+    setConnected(false);
+    socket.disconnect();
   }
 
   function switchRoom(event: React.FormEvent<HTMLFormElement>) {
@@ -264,6 +330,14 @@ export function App() {
           </form>
         ) : (
           <>
+            <div className="identity-bar">
+              <span>
+                Chatting as <strong>{joinedName}</strong>
+              </span>
+              <button type="button" onClick={changeIdentity}>
+                Change
+              </button>
+            </div>
             <div className="message-list" ref={listRef} onScroll={handleScroll}>
               {timeline.length === 0 ? (
                 <div className="empty-state">No messages yet. Start the room.</div>
