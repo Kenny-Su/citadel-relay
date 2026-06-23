@@ -149,6 +149,45 @@ describe('App shell', () => {
     expect(mockSocket.emit).toHaveBeenCalledWith('message:send', { body: 'hello' });
   });
 
+  it('sends the current message when Enter is pressed in the composer', () => {
+    window.localStorage.setItem('citadel.displayName', 'Ada');
+    mockSocket.connected = true;
+
+    render(<App />);
+    act(() => {
+      triggerSocketEvent('connect');
+    });
+    fireEvent.change(screen.getByPlaceholderText('Write a message'), { target: { value: 'hello' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('Write a message'), {
+      key: 'Enter',
+      code: 'Enter',
+      charCode: 13
+    });
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('message:send', { body: 'hello' });
+    expect(screen.getByPlaceholderText('Write a message')).toHaveValue('');
+  });
+
+  it('keeps composing when Shift+Enter is pressed in the composer', () => {
+    window.localStorage.setItem('citadel.displayName', 'Ada');
+    mockSocket.connected = true;
+
+    render(<App />);
+    act(() => {
+      triggerSocketEvent('connect');
+    });
+    fireEvent.change(screen.getByPlaceholderText('Write a message'), { target: { value: 'hello' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('Write a message'), {
+      key: 'Enter',
+      code: 'Enter',
+      charCode: 13,
+      shiftKey: true
+    });
+
+    expect(mockSocket.emit).not.toHaveBeenCalledWith('message:send', { body: 'hello' });
+    expect(screen.getByPlaceholderText('Write a message')).toHaveValue('hello');
+  });
+
   it('renders incoming typing update copy without the current user', () => {
     window.localStorage.setItem('citadel.displayName', 'Ada');
     mockSocket.connected = true;

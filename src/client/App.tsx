@@ -338,6 +338,15 @@ export function App() {
     scheduleTypingStop();
   }
 
+  function handleMessageDraftKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
   function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = messageDraft.trim();
@@ -455,6 +464,7 @@ export function App() {
                 value={messageDraft}
                 maxLength={MESSAGE_MAX_LENGTH}
                 onChange={handleMessageDraftChange}
+                onKeyDown={handleMessageDraftKeyDown}
                 placeholder="Write a message"
                 rows={2}
               />
