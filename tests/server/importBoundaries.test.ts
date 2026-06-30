@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const appIds = ['chat', 'chess', 'snake'] as const;
-const packageOwnedAppIds = ['chat', 'snake'] as const;
+const packageOwnedAppIds = ['chat', 'chess', 'snake'] as const;
 const packageOwnedAppFiles = {
   chat: [
     'index.ts',
@@ -15,6 +15,16 @@ const packageOwnedAppFiles = {
     'serverEntry.ts',
     'messageStore.ts',
     'validation.ts'
+  ],
+  chess: [
+    'index.ts',
+    'manifest.ts',
+    'shared.ts',
+    'client.tsx',
+    'ChessView.tsx',
+    'server.ts',
+    'serverEntry.ts',
+    'repository.ts'
   ],
   snake: [
     'index.ts',

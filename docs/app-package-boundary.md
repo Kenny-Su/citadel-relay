@@ -1,14 +1,14 @@
 # App Package Boundary
 
-Citadel apps are still local source folders today, but their public surfaces should look like future packages. That keeps the eventual package split mechanical instead of architectural.
+Citadel apps now own their implementation source in workspace package folders, while the platform shell still wires them as bundled apps. Their public surfaces should stay package-shaped so the remaining split work stays mechanical instead of architectural.
 
 ## Public Surfaces
 
 Each bundled app exposes three environment-specific surfaces:
 
-- `src/apps/<app>/index.ts`: neutral metadata and shared types only.
-- `src/apps/<app>/client.tsx`: browser `ClientAppModule` and view wiring.
-- `src/apps/<app>/serverEntry.ts`: server bundle, repository resolver, and server-only exports.
+- `packages/apps/<app>/src/index.ts`: neutral metadata and shared types only.
+- `packages/apps/<app>/src/client.tsx`: browser `ClientAppModule` and view wiring.
+- `packages/apps/<app>/src/serverEntry.ts`: server bundle, repository resolver, and server-only exports.
 
 Bundled app order and manifest lists are owned by `src/apps/catalog.ts`. Client and server registries derive their ordered app lists from that neutral catalog.
 
@@ -31,13 +31,13 @@ The current repo uses package-shaped aliases as a dry run for the future split:
 - `@citadel/apps/catalog`.
 - `@citadel/apps/<app>`, `@citadel/apps/<app>/client`, and `@citadel/apps/<app>/server`.
 
-Workspace package shells exist under `packages/` as the scaffold for the source move. They expose thin TypeScript entrypoints that re-export the current `src/` modules:
+Workspace packages exist under `packages/` as the scaffold for the source split. They expose thin TypeScript entrypoints:
 
 - `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, and `./persistence`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
 
 Temporary `src/platform/*` files remain as compatibility shims while the server/client shell code migrates to package imports.
-Chat and Snake are source-owning app packages: their implementations live under `packages/apps/<app>/src`, with `src/apps/<app>/*` left as temporary compatibility shims.
+All bundled apps are source-owning workspace packages: their implementations live under `packages/apps/<app>/src`, with `src/apps/<app>/*` left as temporary compatibility shims.
 
 Shared server app services stay platform-only in `src/apps/serverServices.ts`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint or to the bundled registry adapter.
 

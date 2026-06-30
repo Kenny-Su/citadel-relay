@@ -1,1 +1,1 @@
-export * from '../../../src/apps/chess/serverEntry.js';
+export * from './src/serverEntry.js';
