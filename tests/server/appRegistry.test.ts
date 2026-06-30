@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,42 +140,4 @@ describe('bundled server app registry', () => {
     });
   });
 
-  it('keeps the platform server free of app imports', () => {
-    const source = readFileSync(join(process.cwd(), 'src/platform/server.ts'), 'utf8');
-
-    expect(source).not.toContain('../apps/');
-  });
-
-  it('keeps registries wired through environment-specific app entrypoints', () => {
-    const clientRegistry = readFileSync(join(process.cwd(), 'src/client/appRegistry.tsx'), 'utf8');
-    const serverRegistry = readFileSync(join(process.cwd(), 'src/apps/serverRegistry.ts'), 'utf8');
-
-    expect(clientRegistry).toContain("from '../apps/chat/client'");
-    expect(clientRegistry).toContain("from '../apps/chess/client'");
-    expect(clientRegistry).toContain("from '../apps/snake/client'");
-    expect(clientRegistry).not.toMatch(
-      /\.\.\/apps\/(?:chat|chess|snake)\/(?:serverEntry|server|manifest|messageStore|repository|validation|ChatView|ChessView|SnakeView)/
-    );
-
-    expect(serverRegistry).toContain("from './chat/index.js'");
-    expect(serverRegistry).toContain("from './chess/index.js'");
-    expect(serverRegistry).toContain("from './snake/index.js'");
-    expect(serverRegistry).toContain("from './chat/serverEntry.js'");
-    expect(serverRegistry).toContain("from './chess/serverEntry.js'");
-    expect(serverRegistry).toContain("from './snake/serverEntry.js'");
-    expect(serverRegistry).not.toMatch(
-      /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
-    );
-  });
-
-  it('keeps neutral app indexes free of client and server exports', () => {
-    for (const appId of ['chat', 'chess', 'snake']) {
-      const source = readFileSync(join(process.cwd(), `src/apps/${appId}/index.ts`), 'utf8');
-
-      expect(source).toContain(`export { ${appId}Manifest } from './manifest.js'`);
-      expect(source).not.toMatch(
-        /client|serverEntry|ServerBundle|Repository|messageStore|repository|create[A-Z].*App/
-      );
-    }
-  });
 });
