@@ -25,11 +25,12 @@ Bundled apps import platform APIs through small app-facing facades. These are th
 - `src/platform/serverApp.ts`: server app contracts and shared platform server services.
 - `src/platform/persistence.ts`: persistence APIs intentionally available to app repositories.
 
-The current repo uses package-shaped aliases as a dry run for the future split:
+The current repo uses package-shaped aliases for the split:
 
 - `@citadel/platform/app`, `@citadel/platform/client`, `@citadel/platform/server-app`, and `@citadel/platform/persistence`.
 - `@citadel/apps/catalog`.
-- `@citadel/apps/<app>`, `@citadel/apps/<app>/client`, and `@citadel/apps/<app>/server`.
+- `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` with `./client` and `./server` surfaces.
+- `@citadel/apps/<app>`, `@citadel/apps/<app>/client`, and `@citadel/apps/<app>/server` remain as temporary compatibility aliases.
 
 Workspace packages exist under `packages/` as the scaffold for the source split. They expose thin TypeScript entrypoints:
 
@@ -59,7 +60,7 @@ For example, a future package can map these to exports like:
 - The server registry imports neutral manifests plus app server entrypoints.
 - Neutral app indexes do not export client modules, server bundles, repositories, repository resolvers, or implementation factories.
 - App code imports platform contracts, shared platform helpers, and persistence APIs through `@citadel/platform/*` aliases rather than relative platform, shared, or persistence paths.
-- Registries import bundled app public surfaces through `@citadel/apps/*` aliases rather than relative app entrypoint paths.
+- Registries import bundled app public surfaces through `@citadel/app-*` package aliases rather than relative app entrypoint paths.
 - Platform implementation lives in `packages/platform/src`; compatibility files under `src/platform` must stay thin re-export shims.
 - Bundled app assembly lives in `src/bundledApps`; compatibility files under `src/apps` must not contain host registry logic.
 - App package shell entrypoints stay thin re-export shims to package-local source once each app moves.

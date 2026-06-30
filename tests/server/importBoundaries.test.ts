@@ -100,9 +100,10 @@ describe('app package import boundaries', () => {
 
     expect(registry).toContain("from '@citadel/apps/catalog'");
     for (const appId of appIds) {
-      expect(registry).toContain(`from '@citadel/apps/${appId}'`);
-      expect(registry).toContain(`from '@citadel/apps/${appId}/client'`);
-      expect(registry).not.toContain(`@citadel/apps/${appId}/server`);
+      expect(registry).toContain(`from '@citadel/app-${appId}'`);
+      expect(registry).toContain(`from '@citadel/app-${appId}/client'`);
+      expect(registry).not.toContain(`@citadel/app-${appId}/server`);
+      expect(registry).not.toContain(`@citadel/apps/${appId}`);
     }
     expect(registry).not.toMatch(
       /\.\.\/apps\/(?:chat|chess|snake)\/(?:serverEntry|server|manifest|messageStore|repository|validation|ChatView|ChessView|SnakeView)/
@@ -114,8 +115,9 @@ describe('app package import boundaries', () => {
 
     expect(registry).toContain("from '@citadel/apps/catalog'");
     for (const appId of appIds) {
-      expect(registry).toContain(`from '@citadel/apps/${appId}/server'`);
-      expect(registry).not.toContain(`@citadel/apps/${appId}/client`);
+      expect(registry).toContain(`from '@citadel/app-${appId}/server'`);
+      expect(registry).not.toContain(`@citadel/app-${appId}/client`);
+      expect(registry).not.toContain(`@citadel/apps/${appId}`);
     }
     expect(registry).not.toMatch(
       /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
@@ -337,8 +339,10 @@ describe('app package import boundaries', () => {
     const serverRegistry = source('src/bundledApps/serverRegistry.ts');
 
     for (const appId of appIds) {
-      expect(catalog).toContain(`from '@citadel/apps/${appId}'`);
-      expect(serverRegistry).toContain(`from '@citadel/apps/${appId}/server'`);
+      expect(catalog).toContain(`from '@citadel/app-${appId}'`);
+      expect(catalog).not.toContain(`@citadel/apps/${appId}`);
+      expect(serverRegistry).toContain(`from '@citadel/app-${appId}/server'`);
+      expect(serverRegistry).not.toContain(`@citadel/apps/${appId}`);
     }
     expect(catalog).not.toMatch(/(?:\.\.\/apps|src\/apps|packages\/apps)\/(?:chat|chess|snake)\//);
     expect(serverRegistry).not.toMatch(/(?:\.\.\/apps|src\/apps|packages\/apps)\/(?:chat|chess|snake)\//);

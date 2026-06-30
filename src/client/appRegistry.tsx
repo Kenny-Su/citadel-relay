@@ -1,13 +1,13 @@
 import type { AppManifest } from '../platform/appContract';
 import type { ClientAppModule } from '../platform/clientAppContract';
 import type { AppEventEnvelope, AppId } from '../shared/platform';
-import type { ChatState } from '@citadel/apps/chat';
-import type { ChessState } from '@citadel/apps/chess';
-import type { SnakeState } from '@citadel/apps/snake';
+import type { ChatState } from '@citadel/app-chat';
+import type { ChessState } from '@citadel/app-chess';
+import type { SnakeState } from '@citadel/app-snake';
 import { orderBundledAppEntries } from '@citadel/apps/catalog';
-import { chatClientApp } from '@citadel/apps/chat/client';
-import { chessClientApp } from '@citadel/apps/chess/client';
-import { snakeClientApp } from '@citadel/apps/snake/client';
+import { chatClientApp } from '@citadel/app-chat/client';
+import { chessClientApp } from '@citadel/app-chess/client';
+import { snakeClientApp } from '@citadel/app-snake/client';
 
 export type { AppViewProps, ClientAppModule } from '../platform/clientAppContract';
 

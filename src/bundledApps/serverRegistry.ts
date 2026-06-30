@@ -14,17 +14,17 @@ import {
   type ChatRepository,
   type ChatServerAppServices,
   type MessageStore
-} from '@citadel/apps/chat/server';
+} from '@citadel/app-chat/server';
 import {
   chessServerBundle,
   resolveChessRepository,
   type ChessRepository,
   type ChessServerAppServices
-} from '@citadel/apps/chess/server';
-import { snakeServerBundle } from '@citadel/apps/snake/server';
+} from '@citadel/app-chess/server';
+import { snakeServerBundle } from '@citadel/app-snake/server';
 import type { ServerAppServices } from './serverServices.js';
 
-export type { ChatRateLimitOptions } from '@citadel/apps/chat/server';
+export type { ChatRateLimitOptions } from '@citadel/app-chat/server';
 export type { ServerAppServices } from './serverServices.js';
 
 export type BundledServerAppServices = ServerAppServices & {

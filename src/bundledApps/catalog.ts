@@ -1,8 +1,8 @@
 import type { AppManifest } from '../platform/appContract.js';
 import type { AppId } from '../shared/platform.js';
-import { chatManifest } from '@citadel/apps/chat';
-import { chessManifest } from '@citadel/apps/chess';
-import { snakeManifest } from '@citadel/apps/snake';
+import { chatManifest } from '@citadel/app-chat';
+import { chessManifest } from '@citadel/app-chess';
+import { snakeManifest } from '@citadel/app-snake';
 
 export const bundledAppIds = ['chat', 'chess', 'snake'] satisfies AppId[];
 
