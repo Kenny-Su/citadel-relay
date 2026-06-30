@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createChatServer } from '../../src/server/chatServer.js';
-import { createSqliteMessageStore } from '../../src/apps/chat/messageStore.js';
+import { createChatRepository } from '../../src/apps/chat/messageStore.js';
+import { createChessRepository } from '../../src/apps/chess/repository.js';
+import { openCitadelDatabase, type CitadelDatabase } from '../../src/persistence/sqlite.js';
 
 const staticDir = resolve(process.cwd(), 'dist');
 const hasBuiltClient = existsSync(join(staticDir, 'index.html'));
@@ -12,13 +14,17 @@ const hasBuiltClient = existsSync(join(staticDir, 'index.html'));
 describe.skipIf(!hasBuiltClient)('production server', () => {
   let server: ReturnType<typeof createChatServer>;
   let tempDir: string;
+  let database: CitadelDatabase;
   let url: string;
 
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-platform-production-'));
+    database = openCitadelDatabase(join(tempDir, 'citadel.sqlite'));
     server = createChatServer({
       clientOrigin: '*',
-      messageStore: createSqliteMessageStore(join(tempDir, 'chat.sqlite')),
+      database,
+      chatRepository: createChatRepository(database.database),
+      chessRepository: createChessRepository(database.database),
       staticDir
     });
     await new Promise<void>((resolveListen) =>
@@ -31,7 +37,7 @@ describe.skipIf(!hasBuiltClient)('production server', () => {
   afterEach(async () => {
     await new Promise<void>((resolveClose) => server.io.close(() => resolveClose()));
     await new Promise<void>((resolveClose) => server.httpServer.close(() => resolveClose()));
-    server.messageStore.close();
+    database.close();
     rmSync(tempDir, { recursive: true, force: true });
   });
 

@@ -2,11 +2,14 @@ export const DISPLAY_NAME_MAX_LENGTH = 24;
 export const DEFAULT_SPACE_ID = 'general';
 export const SPACE_ID_MAX_LENGTH = 32;
 export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
+export const GUEST_ID_MAX_LENGTH = 80;
+export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export type AppId = 'chat' | 'chess' | 'snake';
 
 export type Participant = {
   id: string;
+  socketId?: string;
   name: string;
 };
 
@@ -20,6 +23,7 @@ export type SpaceState<TAppState = unknown> = {
 export type JoinSpacePayload = {
   appId: AppId;
   spaceId?: string;
+  guestId?: string;
   name: string;
 };
 
@@ -58,4 +62,18 @@ export function normalizeSpaceId(input: unknown): string {
 
 export function isAppId(value: unknown): value is AppId {
   return value === 'chat' || value === 'chess' || value === 'snake';
+}
+
+export function normalizeGuestId(input: unknown, fallback: string): string {
+  if (typeof input !== 'string') {
+    return fallback;
+  }
+
+  const value = input.trim();
+
+  if (!value || value.length > GUEST_ID_MAX_LENGTH || !GUEST_ID_PATTERN.test(value)) {
+    return fallback;
+  }
+
+  return value;
 }

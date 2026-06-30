@@ -11,6 +11,7 @@ import {
   type Participant,
   type SpaceState,
   isAppId,
+  normalizeGuestId,
   normalizeSpaceId
 } from '../shared/platform.js';
 import { validateDisplayName } from '../apps/chat/validation.js';
@@ -244,7 +245,11 @@ export function createPlatformServer(options: PlatformServerOptions) {
         leaveCurrentSpace(socket);
       }
 
-      const participant: Participant = { id: socket.id, name: result.value };
+      const participant: Participant = {
+        id: normalizeGuestId(payload.guestId, socket.id),
+        socketId: socket.id,
+        name: result.value
+      };
       const session = { appId, spaceId, participant };
       sessions.set(socket.id, session);
       socket.join(socketRoom(appId, spaceId));

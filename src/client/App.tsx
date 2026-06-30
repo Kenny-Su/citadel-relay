@@ -18,6 +18,7 @@ const socket = io({
 });
 
 const DISPLAY_NAME_STORAGE_KEY = 'citadel.displayName';
+const GUEST_ID_STORAGE_KEY = 'citadel.guestId';
 
 type RouteState = {
   appId: AppId;
@@ -85,6 +86,30 @@ function loadStoredDisplayName() {
   }
 }
 
+function createGuestId() {
+  if (typeof window.crypto?.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `guest-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+function loadStoredGuestId() {
+  try {
+    const storedGuestId = window.localStorage.getItem(GUEST_ID_STORAGE_KEY);
+
+    if (storedGuestId) {
+      return storedGuestId;
+    }
+
+    const guestId = createGuestId();
+    window.localStorage.setItem(GUEST_ID_STORAGE_KEY, guestId);
+    return guestId;
+  } catch {
+    return createGuestId();
+  }
+}
+
 function saveStoredDisplayName(name: string) {
   try {
     window.localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, name);
@@ -127,6 +152,7 @@ async function copyText(value: string) {
 
 export function App() {
   const initialDisplayName = React.useMemo(() => loadStoredDisplayName(), []);
+  const guestId = React.useMemo(() => loadStoredGuestId(), []);
   const [route, setRoute] = React.useState(parseRoute);
   const [spaceDraft, setSpaceDraft] = React.useState(route.spaceId);
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
@@ -137,8 +163,9 @@ export function App() {
   const [notice, setNotice] = React.useState('');
 
   const currentApp = appById.get(route.appId) ?? clientApps[0];
-  const currentParticipant = participants.find((participant) => participant.name === joinedName) ?? {
-    id: socket.id ?? '',
+  const currentParticipant = participants.find((participant) => participant.id === guestId) ?? {
+    id: guestId,
+    socketId: socket.id,
     name: joinedName
   };
 
@@ -221,10 +248,11 @@ export function App() {
 
     socket.emit('space:join', {
       appId: route.appId,
+      guestId,
       name: joinedName,
       spaceId: route.spaceId
     });
-  }, [connected, joinedName, route.appId, route.spaceId]);
+  }, [connected, guestId, joinedName, route.appId, route.spaceId]);
 
   function joinSpace(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -395,7 +423,7 @@ export function App() {
         ) : (
           <ul className="participant-list">
             {participants.map((participant) => (
-              <li key={participant.id}>
+              <li key={participant.socketId ?? participant.id}>
                 <span aria-hidden="true">{participant.name.slice(0, 1).toUpperCase()}</span>
                 {participant.name}
               </li>

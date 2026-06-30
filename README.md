@@ -1,6 +1,6 @@
 # Citadel Platform
 
-A small real-time communication platform with bundled chat, chess, and snake apps. The platform owns identity, spaces, presence, Socket.IO routing, and shared errors; each app owns its own state, events, and UI.
+A small real-time communication platform with bundled chat, chess, and snake apps. The platform owns identity, spaces, presence, Socket.IO routing, and shared errors; each app owns its own state, events, UI, and persistence.
 
 ## Local Development
 
@@ -34,6 +34,7 @@ The server reads:
 - `HOST`: bind host, default `0.0.0.0`.
 - `CLIENT_ORIGIN`: allowed Socket.IO browser origin, default `http://localhost:5173`.
 - `CITADEL_DB_PATH`: SQLite database path for chat history, default `data/citadel.sqlite`.
+- Chess games and moves use the same SQLite database through app-owned tables.
 - `CHAT_DB_PATH`: legacy override for the chat SQLite path. If both are set, `CHAT_DB_PATH` wins.
 
 ## Render Deployment

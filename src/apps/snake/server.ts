@@ -203,7 +203,7 @@ export function createSnakeApp(): ServerAppModule {
       const state = getOrCreateState(context);
       syncParticipants(state, context.participants);
 
-      if (context.participants.length <= 1) {
+      if (context.participants.length === 0) {
         stopTimer(state);
         contextsBySpace.delete(context.spaceId);
       } else {

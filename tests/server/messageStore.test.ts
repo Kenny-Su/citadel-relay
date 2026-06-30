@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_SPACE_ID } from '../../src/shared/platform.js';
 import { MESSAGE_HISTORY_LIMIT, type ChatMessage } from '../../src/apps/chat/shared.js';
-import { createSqliteMessageStore, type MessageStore } from '../../src/apps/chat/messageStore.js';
+import { createChatRepository, createSqliteMessageStore, type MessageStore } from '../../src/apps/chat/messageStore.js';
 
 function makeMessage(index: number): ChatMessage {
   return {
@@ -69,7 +69,7 @@ describe('sqlite message store', () => {
     expect(store.listRecentMessages(DEFAULT_SPACE_ID)).toEqual([makeMessage(1)]);
   });
 
-  it('scopes messages by room', () => {
+  it('scopes messages by space', () => {
     const generalMessage = makeMessage(1);
     const designMessage = { ...makeMessage(2), spaceId: 'design' };
 
@@ -80,7 +80,7 @@ describe('sqlite message store', () => {
     expect(store.listRecentMessages('design')).toEqual([designMessage]);
   });
 
-  it('keeps the history limit per room', () => {
+  it('keeps the history limit per space', () => {
     for (let index = 0; index < MESSAGE_HISTORY_LIMIT + 5; index += 1) {
       store.saveMessage(makeMessage(index));
       store.saveMessage({ ...makeMessage(index + 200), spaceId: 'design' });
@@ -100,7 +100,7 @@ describe('sqlite message store', () => {
 
     const database = new DatabaseSync(dbPath);
     database.exec(`
-      DROP TABLE messages;
+      DROP TABLE chat_messages;
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -125,5 +125,19 @@ describe('sqlite message store', () => {
         createdAt: '2026-01-01T00:00:00.000Z'
       }
     ]);
+  });
+
+  it('uses app-owned chat_messages when sharing a database', () => {
+    store.close();
+
+    const database = new DatabaseSync(dbPath);
+    store = createChatRepository(database);
+    store.saveMessage(makeMessage(1));
+
+    const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+    expect(tables).toContainEqual({ name: 'chat_messages' });
+    expect(tables).not.toContainEqual({ name: 'messages' });
+
+    database.close();
   });
 });

@@ -2,10 +2,10 @@ import { nanoid } from 'nanoid';
 import type { ServerAppContext, ServerAppModule } from '../../platform/server.js';
 import { MESSAGE_HISTORY_LIMIT, type ChatMessage, type SendMessagePayload } from './shared.js';
 import { validateMessageBody } from './validation.js';
-import type { MessageStore } from './messageStore.js';
+import type { ChatRepository } from './messageStore.js';
 
 export type ChatAppOptions = {
-  messageStore: MessageStore;
+  repository: ChatRepository;
   messageRateLimit?: {
     maxMessages: number;
     windowMs: number;
@@ -59,7 +59,7 @@ export function createChatApp(options: ChatAppOptions): ServerAppModule {
   function emitTypingUpdate(context: ServerAppContext) {
     const typingSocketIds = typingBySpace.get(context.spaceId) ?? new Set<string>();
     const participants = [...typingSocketIds]
-      .map((socketId) => context.participants.find((participant) => participant.id === socketId))
+      .map((socketId) => context.participants.find((participant) => participant.socketId === socketId))
       .filter((participant): participant is NonNullable<typeof participant> => Boolean(participant))
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -74,12 +74,12 @@ export function createChatApp(options: ChatAppOptions): ServerAppModule {
     getInitialState(context) {
       const typingSocketIds = typingBySpace.get(context.spaceId) ?? new Set<string>();
       const typingParticipants = [...typingSocketIds]
-        .map((socketId) => context.participants.find((participant) => participant.id === socketId))
+        .map((socketId) => context.participants.find((participant) => participant.socketId === socketId))
         .filter((participant): participant is NonNullable<typeof participant> => Boolean(participant))
         .sort((a, b) => a.name.localeCompare(b.name));
 
       return {
-        messages: options.messageStore.listRecentMessages(context.spaceId, MESSAGE_HISTORY_LIMIT),
+        messages: options.repository.listRecentMessages(context.spaceId, MESSAGE_HISTORY_LIMIT),
         typingParticipants
       };
     },
@@ -129,7 +129,7 @@ export function createChatApp(options: ChatAppOptions): ServerAppModule {
         createdAt: new Date().toISOString()
       };
 
-      options.messageStore.saveMessage(message);
+      options.repository.saveMessage(message);
       clearTyping(context, context.socketId);
       context.emitToSpace('chat:message:new', message);
     },

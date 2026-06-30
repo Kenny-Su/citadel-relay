@@ -1,7 +1,9 @@
 import { Chess } from 'chess.js';
+import { nanoid } from 'nanoid';
 import type { Participant } from '../../shared/platform.js';
 import type { ServerAppModule } from '../../platform/server.js';
 import type { ChessColor, ChessMovePayload, ChessState } from './shared.js';
+import type { ChessRepository } from './repository.js';
 
 type ChessSpaceState = {
   game: Chess;
@@ -9,34 +11,34 @@ type ChessSpaceState = {
     white?: string;
     black?: string;
   };
+  pgn: string;
 };
 
-function getOrCreateState(context: Parameters<ServerAppModule['getInitialState']>[0]) {
+export type ChessAppOptions = {
+  repository: ChessRepository;
+};
+
+type ChessContext = Parameters<ServerAppModule['getInitialState']>[0];
+
+function getOrCreateState(context: ChessContext, repository: ChessRepository) {
   const existing = context.getAppState<ChessSpaceState>();
 
   if (existing) {
     return existing;
   }
 
+  const savedGame = repository.getGame(context.spaceId);
+  const game = savedGame ? new Chess(savedGame.fen) : new Chess();
   const state: ChessSpaceState = {
-    game: new Chess(),
-    players: {}
+    game,
+    players: savedGame?.players ?? {},
+    pgn: savedGame?.pgn ?? ''
   };
   context.setAppState(state);
   return state;
 }
 
 function assignPlayers(state: ChessSpaceState, participants: Participant[]) {
-  const participantIds = new Set(participants.map((participant) => participant.id));
-
-  if (state.players.white && !participantIds.has(state.players.white)) {
-    state.players.white = undefined;
-  }
-
-  if (state.players.black && !participantIds.has(state.players.black)) {
-    state.players.black = undefined;
-  }
-
   for (const participant of participants) {
     if (!state.players.white) {
       state.players.white = participant.id;
@@ -49,7 +51,7 @@ function assignPlayers(state: ChessSpaceState, participants: Participant[]) {
   }
 }
 
-function toClientState(state: ChessSpaceState): ChessState {
+function getStatus(state: ChessSpaceState) {
   const turn: ChessColor = state.game.turn() === 'w' ? 'white' : 'black';
   let status = `${turn} to move`;
 
@@ -61,12 +63,18 @@ function toClientState(state: ChessSpaceState): ChessState {
     status = `${turn} is in check`;
   }
 
+  return status;
+}
+
+function toClientState(state: ChessSpaceState): ChessState {
+  const turn: ChessColor = state.game.turn() === 'w' ? 'white' : 'black';
+
   return {
     fen: state.game.fen(),
     turn,
     players: state.players,
-    status,
-    pgn: state.game.pgn()
+    status: getStatus(state),
+    pgn: state.game.pgn() || state.pgn
   };
 }
 
@@ -82,17 +90,30 @@ function colorForParticipant(state: ChessSpaceState, participantId: string): Che
   return null;
 }
 
-export function createChessApp(): ServerAppModule {
+function saveGame(repository: ChessRepository, context: Pick<ChessContext, 'spaceId'>, state: ChessSpaceState) {
+  repository.saveGame({
+    spaceId: context.spaceId,
+    fen: state.game.fen(),
+    pgn: state.game.pgn() || state.pgn,
+    players: state.players,
+    status: getStatus(state),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+export function createChessApp(options: ChessAppOptions): ServerAppModule {
   return {
     appId: 'chess',
     getInitialState(context) {
-      const state = getOrCreateState(context);
+      const state = getOrCreateState(context, options.repository);
       assignPlayers(state, context.participants);
+      saveGame(options.repository, context, state);
       return toClientState(state);
     },
     handleEvent(context, event) {
-      const state = getOrCreateState(context);
+      const state = getOrCreateState(context, options.repository);
       assignPlayers(state, context.participants);
+      saveGame(options.repository, context, state);
 
       if (event.type !== 'chess:move') {
         return;
@@ -122,16 +143,28 @@ export function createChessApp(): ServerAppModule {
         return;
       }
 
+      state.pgn = state.game.pgn();
+      const createdAt = new Date().toISOString();
+      options.repository.appendMove({
+        id: nanoid(),
+        spaceId: context.spaceId,
+        participantId: context.participant.id,
+        move: payload,
+        san: move.san,
+        fenAfter: state.game.fen(),
+        createdAt
+      });
+      saveGame(options.repository, context, state);
       context.emitToSpace('chess:state', toClientState(state));
       context.emitSpaceState();
     },
     onParticipantJoined(context) {
-      const state = getOrCreateState(context);
+      const state = getOrCreateState(context, options.repository);
       assignPlayers(state, context.participants);
+      saveGame(options.repository, context, state);
     },
     onParticipantLeft(context) {
-      const state = getOrCreateState(context);
-      assignPlayers(state, context.participants);
+      const state = getOrCreateState(context, options.repository);
       context.emitToSpace('chess:state', toClientState(state));
     }
   };

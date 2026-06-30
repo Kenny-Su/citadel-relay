@@ -16,7 +16,9 @@ In development, Vite forwards Socket.IO traffic from the frontend to the backend
 
 - `appId`: one of `chat`, `chess`, or `snake`
 - `spaceId`: lowercase letters, numbers, and hyphens; invalid values normalize to `general`
-- `participant`: `{ id: string; name: string }`
+- `participant`: `{ id: string; socketId?: string; name: string }`
+
+`participant.id` is a stable guest id stored by the browser. `socketId` is the current live connection id and can change after reconnect.
 
 Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are normalized by the client into `/apps/chat/spaces/:spaceId`.
 
@@ -30,6 +32,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 {
   appId: "chat" | "chess" | "snake";
   spaceId?: string;
+  guestId?: string;
   name: string;
 }
 ```
@@ -99,16 +102,22 @@ Chat:
 - server `chat:typing:update`
 - server `chat:notice`
 
+Chat history is persisted in app-owned `chat_messages` rows.
+
 Chess:
 
 - client `chess:move` with `{ from: string; to: string; promotion?: string }`
 - server `chess:state`
 - server `chess:notice`
 
+Chess games and moves are persisted by space, so stable guest ids preserve white/black ownership across reconnects.
+
 Snake:
 
 - client `snake:direction` with `{ direction: "up" | "down" | "left" | "right" }`
 - server `snake:state`
+
+Snake state is live-only in this version.
 
 ## Validation
 
