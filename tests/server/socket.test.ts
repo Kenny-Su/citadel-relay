@@ -12,6 +12,7 @@ import type { ChatMessage, TypingUpdatePayload } from '../../src/apps/chat/share
 import type { ChessState } from '../../src/apps/chess/shared.js';
 import type { SnakeState } from '../../src/apps/snake/shared.js';
 import type { AppEventEnvelope, AppId, PlatformErrorPayload, SpaceState } from '../../src/shared/platform.js';
+import type { AppManifest } from '../../src/platform/appContract.js';
 
 function once<T>(socket: Socket, event: string) {
   return new Promise<T>((resolve) => {
@@ -37,6 +38,18 @@ function wait(ms: number) {
     setTimeout(resolve, ms);
   });
 }
+
+type PlatformMetadataResponse = {
+  apps: AppId[];
+  appManifests: AppManifest[];
+};
+
+type HealthResponse = PlatformMetadataResponse & {
+  ok: boolean;
+  appCount: number;
+  participants: number;
+  version: string;
+};
 
 describe('platform socket', () => {
   let server: ReturnType<typeof createChatServer>;
@@ -112,27 +125,35 @@ describe('platform socket', () => {
     const address = server.httpServer.address() as AddressInfo;
     url = `http://127.0.0.1:${address.port}`;
 
-    await expect(fetch(`${url}/health`).then((response) => response.json())).resolves.toMatchObject({
-      apps: ['chat', 'snake']
-    });
-    await expect(fetch(`${url}/config`).then((response) => response.json())).resolves.toEqual({
+    const expectedAppManifests = [
+      {
+        appId: 'chat',
+        label: 'Chat',
+        defaultSpaceId: 'general',
+        persistence: 'sqlite',
+        version: '0.1.0'
+      },
+      {
+        appId: 'snake',
+        label: 'Snake',
+        defaultSpaceId: 'general',
+        persistence: 'none',
+        version: '0.1.0'
+      }
+    ];
+    const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
+    const config = await fetch(`${url}/config`).then((response) => response.json()) as PlatformMetadataResponse;
+
+    expect(health).toMatchObject({
+      ok: true,
       apps: ['chat', 'snake'],
-      appManifests: [
-        {
-          appId: 'chat',
-          label: 'Chat',
-          defaultSpaceId: 'general',
-          persistence: 'sqlite',
-          version: '0.1.0'
-        },
-        {
-          appId: 'snake',
-          label: 'Snake',
-          defaultSpaceId: 'general',
-          persistence: 'none',
-          version: '0.1.0'
-        }
-      ]
+      appCount: 2,
+      appManifests: expectedAppManifests,
+      version: '0.1.0'
+    });
+    expect(config).toEqual({
+      apps: health.apps,
+      appManifests: health.appManifests
     });
   });
 

@@ -16,6 +16,7 @@ import {
 } from '../shared/platform.js';
 import type { AppManifest, ServerAppContext, ServerAppModule } from './appContract.js';
 import { validateDisplayName } from './validation.js';
+import { PLATFORM_VERSION } from './version.js';
 
 export type PlatformServerOptions = {
   clientOrigin?: string;
@@ -28,6 +29,13 @@ type ParticipantSession = {
   appId: AppId;
   spaceId: string;
   participant: Participant;
+};
+
+type PlatformMetadata = {
+  apps: AppId[];
+  appCount: number;
+  appManifests: AppManifest[];
+  version: string;
 };
 
 export function createPlatformServer(options: PlatformServerOptions) {
@@ -187,22 +195,33 @@ export function createPlatformServer(options: PlatformServerOptions) {
     emitSpaceState(session.appId, session.spaceId);
   }
 
+  function getPlatformMetadata(): PlatformMetadata {
+    const apps = [...modules.keys()];
+
+    return {
+      apps,
+      appCount: apps.length,
+      appManifests: apps
+        .map((appId) => manifests.get(appId))
+        .filter((manifest): manifest is AppManifest => Boolean(manifest)),
+      version: PLATFORM_VERSION
+    };
+  }
+
   app.get('/health', (_request, response) => {
     response.json({
+      ...getPlatformMetadata(),
       ok: true,
-      participants: sessions.size,
-      apps: [...modules.keys()]
+      participants: sessions.size
     });
   });
 
   app.get('/config', (_request, response) => {
-    const apps = [...modules.keys()];
+    const { apps, appManifests } = getPlatformMetadata();
 
     response.json({
       apps,
-      appManifests: apps
-        .map((appId) => manifests.get(appId))
-        .filter((manifest): manifest is AppManifest => Boolean(manifest))
+      appManifests
     });
   });
 

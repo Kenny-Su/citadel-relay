@@ -43,7 +43,7 @@ describe.skipIf(!hasBuiltClient)('production server', () => {
 
   it('serves health, app routes, and legacy room routes from one server', async () => {
     const health = await fetch(`${url}/health`);
-    await expect(health.json()).resolves.toMatchObject({ ok: true });
+    await expect(health.json()).resolves.toMatchObject({ ok: true, version: '0.1.0' });
 
     for (const path of [
       '/apps/chat/spaces/general',
