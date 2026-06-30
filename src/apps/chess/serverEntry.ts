@@ -1,8 +1,12 @@
 import type { ServerAppBundle } from '../../platform/serverAppContract.js';
 import type { ServerAppServices } from '../serverServices.js';
 import { chessManifest } from './manifest.js';
-import { createChessRepository } from './repository.js';
+import { createChessRepository, type ChessRepository } from './repository.js';
 import { createChessApp } from './server.js';
+
+export type ChessServerAppServices = ServerAppServices & {
+  chessRepository?: ChessRepository;
+};
 
 export {
   createChessRepository,
@@ -11,7 +15,7 @@ export {
   type PersistedChessMove
 } from './repository.js';
 
-export function resolveChessRepository(services: ServerAppServices) {
+export function resolveChessRepository(services: ChessServerAppServices) {
   return services.chessRepository ?? createChessRepository(services.database.database);
 }
 
@@ -22,4 +26,4 @@ export const chessServerBundle = {
       repository: resolveChessRepository(services)
     });
   }
-} satisfies ServerAppBundle<ServerAppServices>;
+} satisfies ServerAppBundle<ChessServerAppServices>;

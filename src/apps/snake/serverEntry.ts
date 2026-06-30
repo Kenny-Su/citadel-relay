@@ -5,7 +5,7 @@ import { createSnakeApp } from './server.js';
 
 export const snakeServerBundle = {
   appId: snakeManifest.appId,
-  createServerApp() {
+  createServerApp(_services) {
     return createSnakeApp();
   }
 } satisfies ServerAppBundle<ServerAppServices>;

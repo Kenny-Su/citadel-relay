@@ -79,6 +79,19 @@ describe('app package import boundaries', () => {
     }
   });
 
+  it('keeps shared server services platform-only', () => {
+    const services = source('src/apps/serverServices.ts');
+
+    expect(services).toContain('../persistence/sqlite.js');
+    expect(services).not.toMatch(/AppId|chat|chess|messageStore|Repository|RateLimit|enabledAppIds/);
+  });
+
+  it('keeps app server service types scoped to their own app', () => {
+    expect(source('src/apps/chat/serverEntry.ts')).not.toMatch(/chess|Chess/);
+    expect(source('src/apps/chess/serverEntry.ts')).not.toMatch(/chat|Chat|messageStore/);
+    expect(source('src/apps/snake/serverEntry.ts')).not.toMatch(/chat|Chat|chess|Chess|Repository|messageStore/);
+  });
+
   it('keeps registries on environment-specific platform contracts', () => {
     expect(source('src/client/appRegistry.tsx')).toContain('../platform/clientAppContract');
     expect(source('src/client/appRegistry.tsx')).not.toContain('serverAppContract');

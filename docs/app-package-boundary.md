@@ -18,6 +18,8 @@ Platform contracts are split by environment:
 - `src/platform/clientAppContract.ts`: browser view contracts such as `AppViewProps` and `ClientAppModule`.
 - `src/platform/serverAppContract.ts`: server runtime contracts such as `ServerAppContext`, `ServerAppModule`, and `ServerAppBundle`.
 
+Shared server app services stay platform-only in `src/apps/serverServices.ts`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint or to the bundled registry adapter.
+
 For example, a future package can map these to exports like:
 
 ```json
@@ -37,6 +39,7 @@ For example, a future package can map these to exports like:
 - App client code must not import server entrypoints, repositories, message stores, or `node:*` modules.
 - App server entrypoints must not import React views or app client modules.
 - Server-side code must not import `clientAppContract`, and client-side code must not import `serverAppContract`.
+- Shared server service contracts must not mention concrete app repositories, enabled-app config, or app-specific options.
 
 Compatibility shims such as `src/server/messageStore.ts` and focused repository tests may still import implementation files directly. Those are compatibility and implementation-test boundaries, not platform runtime wiring.
 
