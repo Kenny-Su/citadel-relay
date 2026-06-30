@@ -1,7 +1,7 @@
-import { createPlatformServer, type PlatformServerOptions } from '../platform/server.js';
+import { createPlatformServer, type PlatformServerOptions } from '@citadel/platform/server';
 import type { AppId } from '@citadel/platform/app';
-import { type ChatRepository, type MessageStore } from '../apps/chat/serverEntry.js';
-import { type ChessRepository } from '../apps/chess/serverEntry.js';
+import { type ChatRepository, type MessageStore } from '@citadel/app-chat/server';
+import { type ChessRepository } from '@citadel/app-chess/server';
 import {
   createBundledServerApps,
   filterAppManifests,

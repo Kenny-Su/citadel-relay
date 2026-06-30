@@ -1,15 +1,14 @@
-import type { AppManifest } from '../platform/appContract';
-import type { ClientAppModule } from '../platform/clientAppContract';
-import type { AppEventEnvelope, AppId } from '@citadel/platform/app';
+import type { AppEventEnvelope, AppId, AppManifest } from '@citadel/platform/app';
+import type { ClientAppModule } from '@citadel/platform/client';
 import type { ChatState } from '@citadel/app-chat';
 import type { ChessState } from '@citadel/app-chess';
 import type { SnakeState } from '@citadel/app-snake';
-import { orderBundledAppEntries } from '@citadel/apps/catalog';
+import { orderBundledAppEntries } from '../bundledApps/catalog';
 import { chatClientApp } from '@citadel/app-chat/client';
 import { chessClientApp } from '@citadel/app-chess/client';
 import { snakeClientApp } from '@citadel/app-snake/client';
 
-export type { AppViewProps, ClientAppModule } from '../platform/clientAppContract';
+export type { AppViewProps, ClientAppModule } from '@citadel/platform/client';
 
 export const allClientApps = orderBundledAppEntries({
   chat: chatClientApp,

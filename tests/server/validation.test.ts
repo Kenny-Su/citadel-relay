@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validateDisplayName, validateMessageBody } from '../../src/server/validation.js';
+import { validateDisplayName } from '@citadel/platform/validation';
+import { validateMessageBody } from '@citadel/app-chat/validation';
 
 describe('validation', () => {
   it('normalizes valid display names', () => {

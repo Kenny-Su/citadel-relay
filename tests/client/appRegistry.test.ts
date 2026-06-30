@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bundledAppIds } from '../../src/apps/catalog';
+import { bundledAppIds } from '../../src/bundledApps/catalog';
 import { allClientApps } from '../../src/client/appRegistry';
 
 describe('client app registry', () => {

@@ -18,19 +18,12 @@
       "@citadel/platform/client": ["packages/platform/client.ts"],
       "@citadel/platform/server-app": ["packages/platform/server-app.ts"],
       "@citadel/platform/persistence": ["packages/platform/persistence.ts"],
-      "@citadel/apps/catalog": ["src/bundledApps/catalog.ts"],
-      "@citadel/apps/chat": ["packages/apps/chat/index.ts"],
-      "@citadel/apps/chat/client": ["packages/apps/chat/client.ts"],
-      "@citadel/apps/chat/server": ["packages/apps/chat/server.ts"],
-      "@citadel/apps/chess": ["packages/apps/chess/index.ts"],
-      "@citadel/apps/chess/client": ["packages/apps/chess/client.ts"],
-      "@citadel/apps/chess/server": ["packages/apps/chess/server.ts"],
-      "@citadel/apps/snake": ["packages/apps/snake/index.ts"],
-      "@citadel/apps/snake/client": ["packages/apps/snake/client.ts"],
-      "@citadel/apps/snake/server": ["packages/apps/snake/server.ts"],
+      "@citadel/platform/server": ["packages/platform/server.ts"],
+      "@citadel/platform/validation": ["packages/platform/validation.ts"],
       "@citadel/app-chat": ["packages/apps/chat/index.ts"],
       "@citadel/app-chat/client": ["packages/apps/chat/client.ts"],
       "@citadel/app-chat/server": ["packages/apps/chat/server.ts"],
+      "@citadel/app-chat/validation": ["packages/apps/chat/validation.ts"],
       "@citadel/app-chess": ["packages/apps/chess/index.ts"],
       "@citadel/app-chess/client": ["packages/apps/chess/client.ts"],
       "@citadel/app-chess/server": ["packages/apps/chess/server.ts"],
@@ -43,5 +36,5 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src/client", "src/shared", "vitest.setup.ts"]
+  "include": ["src/client", "vitest.setup.ts"]
 }

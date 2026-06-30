@@ -1,1 +1,1 @@
-export type { ServerAppServices } from '../platform/serverApp.js';
+export type { ServerAppServices } from '@citadel/platform/server-app';

@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { openCitadelDatabase, type CitadelDatabase } from '../../src/persistence/sqlite.js';
-import { createChessRepository, type ChessRepository } from '../../src/apps/chess/repository.js';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { createChessRepository, type ChessRepository } from '@citadel/app-chess/server';
 
 describe('chess repository', () => {
   let tempDir: string;

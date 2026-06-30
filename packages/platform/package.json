@@ -7,7 +7,9 @@
     "./app": "./app.ts",
     "./client": "./client.ts",
     "./server-app": "./server-app.ts",
-    "./persistence": "./persistence.ts"
+    "./persistence": "./persistence.ts",
+    "./server": "./server.ts",
+    "./validation": "./validation.ts"
   },
   "peerDependencies": {
     "react": "^19.1.0"

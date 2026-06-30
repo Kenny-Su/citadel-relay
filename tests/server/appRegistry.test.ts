@@ -12,21 +12,21 @@ import {
   resolveBundledRepositories
 } from '../../src/bundledApps/serverRegistry.js';
 import { bundledAppIds } from '../../src/bundledApps/catalog.js';
-import { openCitadelDatabase, type CitadelDatabase } from '../../src/persistence/sqlite.js';
-import type { ChatRepository } from '../../src/apps/chat/serverEntry.js';
-import type { ChessRepository } from '../../src/apps/chess/serverEntry.js';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import type { ChatRepository } from '@citadel/app-chat/server';
+import type { ChessRepository } from '@citadel/app-chess/server';
 import {
   chatManifest as publicChatManifest
-} from '../../src/apps/chat/index.js';
+} from '@citadel/app-chat';
 import {
   chessManifest as publicChessManifest
-} from '../../src/apps/chess/index.js';
+} from '@citadel/app-chess';
 import {
   snakeManifest as publicSnakeManifest
-} from '../../src/apps/snake/index.js';
-import { chatServerBundle as publicChatServerBundle } from '../../src/apps/chat/serverEntry.js';
-import { chessServerBundle as publicChessServerBundle } from '../../src/apps/chess/serverEntry.js';
-import { snakeServerBundle as publicSnakeServerBundle } from '../../src/apps/snake/serverEntry.js';
+} from '@citadel/app-snake';
+import { chatServerBundle as publicChatServerBundle } from '@citadel/app-chat/server';
+import { chessServerBundle as publicChessServerBundle } from '@citadel/app-chess/server';
+import { snakeServerBundle as publicSnakeServerBundle } from '@citadel/app-snake/server';
 
 describe('bundled server app registry', () => {
   let tempDir: string;

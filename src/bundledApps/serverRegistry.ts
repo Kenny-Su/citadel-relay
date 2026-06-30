@@ -1,12 +1,11 @@
-import type { AppId } from '@citadel/platform/app';
+import type { AppId, AppManifest } from '@citadel/platform/app';
 import { isAppId } from '@citadel/platform/app';
-import type { AppManifest } from '../platform/appContract.js';
-import type { ServerAppModule } from '../platform/serverAppContract.js';
+import type { ServerAppModule } from '@citadel/platform/server-app';
 import {
   bundledAppIds,
   bundledAppManifests,
   orderBundledAppEntries
-} from '@citadel/apps/catalog';
+} from './catalog.js';
 import {
   chatServerBundle,
   resolveChatRepository,
@@ -42,7 +41,7 @@ export function resolveBundledRepositories(services: BundledServerAppServices) {
   };
 }
 
-export { bundledAppManifests } from '@citadel/apps/catalog';
+export { bundledAppManifests } from './catalog.js';
 
 type BundledServerAppBundle =
   | typeof chatServerBundle

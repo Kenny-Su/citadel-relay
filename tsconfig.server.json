@@ -7,5 +7,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/server", "src/shared", "tests/server"]
+  "include": ["src/server", "src/bundledApps", "tests/server"]
 }

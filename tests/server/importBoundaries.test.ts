@@ -1,42 +1,42 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const appIds = ['chat', 'chess', 'snake'] as const;
-const packageOwnedAppIds = ['chat', 'chess', 'snake'] as const;
-const packageOwnedAppFiles = {
+const appShimFilesById = {
   chat: [
+    'ChatView.tsx',
+    'client.tsx',
     'index.ts',
     'manifest.ts',
-    'shared.ts',
-    'client.tsx',
-    'ChatView.tsx',
+    'messageStore.ts',
     'server.ts',
     'serverEntry.ts',
-    'messageStore.ts',
+    'shared.ts',
     'validation.ts'
   ],
   chess: [
+    'ChessView.tsx',
+    'client.tsx',
     'index.ts',
     'manifest.ts',
-    'shared.ts',
-    'client.tsx',
-    'ChessView.tsx',
+    'repository.ts',
     'server.ts',
     'serverEntry.ts',
-    'repository.ts'
+    'shared.ts'
   ],
   snake: [
+    'SnakeView.tsx',
+    'client.tsx',
     'index.ts',
     'manifest.ts',
-    'shared.ts',
-    'client.tsx',
-    'SnakeView.tsx',
     'server.ts',
-    'serverEntry.ts'
+    'serverEntry.ts',
+    'shared.ts'
   ]
 } as const;
-const platformModuleNames = [
+const platformEntrypointNames = ['app', 'client', 'persistence', 'server', 'server-app', 'validation'] as const;
+const platformSourceModuleNames = [
   'app',
   'appContract',
   'client',
@@ -45,10 +45,21 @@ const platformModuleNames = [
   'server',
   'serverApp',
   'serverAppContract',
+  'shared',
+  'sqlite',
   'validation',
   'version'
 ] as const;
-const platformSourceModuleNames = [...platformModuleNames, 'shared', 'sqlite'] as const;
+const deletedCompatibilityPaths = [
+  'src/apps/catalog.ts',
+  'src/apps/serverRegistry.ts',
+  'src/apps/serverServices.ts',
+  'src/persistence/sqlite.ts',
+  'src/server/messageStore.ts',
+  'src/server/validation.ts',
+  'src/shared/chat.ts',
+  'src/shared/platform.ts'
+] as const;
 
 function source(path: string) {
   return readFileSync(join(process.cwd(), path), 'utf8');
@@ -59,18 +70,20 @@ function jsonSource<T>(path: string) {
 }
 
 function appImplementationPath(appId: (typeof appIds)[number], fileName: string) {
-  return (packageOwnedAppIds as readonly string[]).includes(appId)
-    ? `packages/apps/${appId}/src/${fileName}`
-    : `src/apps/${appId}/${fileName}`;
+  return `packages/apps/${appId}/src/${fileName}`;
+}
+
+function exists(path: string) {
+  return existsSync(join(process.cwd(), path));
 }
 
 describe('app package import boundaries', () => {
-  it('keeps platform core free of concrete app imports', () => {
+  it('keeps platform core free of concrete apps and root compatibility imports', () => {
     for (const moduleName of platformSourceModuleNames) {
-      expect(source(`packages/platform/src/${moduleName}.ts`)).not.toContain('../apps/');
-      expect(source(`packages/platform/src/${moduleName}.ts`)).not.toContain('../../../src/apps/');
-      expect(source(`packages/platform/src/${moduleName}.ts`)).not.toContain('../../../src/shared/');
-      expect(source(`packages/platform/src/${moduleName}.ts`)).not.toContain('../../../src/persistence/');
+      const moduleSource = source(`packages/platform/src/${moduleName}.ts`);
+
+      expect(moduleSource).not.toContain('../apps/');
+      expect(moduleSource).not.toContain('../../../src/');
     }
     expect(source('packages/platform/src/appContract.ts')).not.toContain('react');
   });
@@ -98,26 +111,25 @@ describe('app package import boundaries', () => {
     }
   });
 
-  it('keeps client registry wired only to app client entrypoints and neutral shared types', () => {
+  it('keeps client registry wired to real app packages and platform client contracts', () => {
     const registry = source('src/client/appRegistry.tsx');
 
-    expect(registry).toContain("from '@citadel/apps/catalog'");
+    expect(registry).toContain("from '../bundledApps/catalog'");
     expect(registry).toContain("from '@citadel/platform/app'");
+    expect(registry).toContain("from '@citadel/platform/client'");
     for (const appId of appIds) {
       expect(registry).toContain(`from '@citadel/app-${appId}'`);
       expect(registry).toContain(`from '@citadel/app-${appId}/client'`);
       expect(registry).not.toContain(`@citadel/app-${appId}/server`);
       expect(registry).not.toContain(`@citadel/apps/${appId}`);
     }
-    expect(registry).not.toMatch(
-      /\.\.\/apps\/(?:chat|chess|snake)\/(?:serverEntry|server|manifest|messageStore|repository|validation|ChatView|ChessView|SnakeView)/
-    );
   });
 
-  it('keeps server registry wired only to app server entrypoints and neutral manifests', () => {
+  it('keeps bundled server registry wired to real app server packages', () => {
     const registry = source('src/bundledApps/serverRegistry.ts');
 
-    expect(registry).toContain("from '@citadel/apps/catalog'");
+    expect(registry).toContain("from './catalog.js'");
+    expect(registry).toContain("from '@citadel/platform/server-app'");
     for (const appId of appIds) {
       expect(registry).toContain(`from '@citadel/app-${appId}/server'`);
       expect(registry).not.toContain(`@citadel/app-${appId}/client`);
@@ -151,7 +163,7 @@ describe('app package import boundaries', () => {
   it('keeps shared server services platform-only', () => {
     const services = source('src/bundledApps/serverServices.ts');
 
-    expect(services).toContain('../platform/serverApp.js');
+    expect(services).toContain('@citadel/platform/server-app');
     expect(services).not.toMatch(/AppId|chat|chess|messageStore|Repository|RateLimit|enabledAppIds/);
   });
 
@@ -161,13 +173,6 @@ describe('app package import boundaries', () => {
     expect(source(appImplementationPath('snake', 'serverEntry.ts'))).not.toMatch(
       /chat|Chat|chess|Chess|Repository|messageStore/
     );
-  });
-
-  it('keeps registries on environment-specific platform contracts', () => {
-    expect(source('src/client/appRegistry.tsx')).toContain('../platform/clientAppContract');
-    expect(source('src/client/appRegistry.tsx')).not.toContain('serverAppContract');
-    expect(source('src/bundledApps/serverRegistry.ts')).toContain('../platform/serverAppContract.js');
-    expect(source('src/bundledApps/serverRegistry.ts')).not.toContain('clientAppContract');
   });
 
   it('keeps app code on platform facade imports', () => {
@@ -195,19 +200,10 @@ describe('app package import boundaries', () => {
       expect(serverEntry).toContain('@citadel/platform/server-app');
       expect(serverEntry).not.toContain('@citadel/platform/client');
       expect(serverEntry).not.toMatch(forbiddenDeepAppImports);
-      expect(serverEntry).not.toContain('../serverServices.js');
     }
-
-    expect(source('packages/apps/chat/src/shared.ts')).toContain('@citadel/platform/app');
-    expect(source('packages/apps/chat/src/shared.ts')).not.toMatch(forbiddenDeepAppImports);
-    expect(source('packages/apps/chat/src/validation.ts')).toContain('@citadel/platform/app');
-    expect(source('packages/apps/chat/src/validation.ts')).not.toMatch(forbiddenDeepAppImports);
-    expect(source('packages/apps/chat/src/messageStore.ts')).toContain('@citadel/platform/app');
-    expect(source('packages/apps/chat/src/messageStore.ts')).toContain('@citadel/platform/persistence');
-    expect(source('packages/apps/chat/src/messageStore.ts')).not.toMatch(forbiddenDeepAppImports);
   });
 
-  it('declares package-shaped aliases for TypeScript and Vite', () => {
+  it('declares only real package-shaped aliases for TypeScript and Vite', () => {
     const tsconfig = source('tsconfig.json');
     const viteConfig = source('vite.config.ts');
 
@@ -216,19 +212,12 @@ describe('app package import boundaries', () => {
       '@citadel/platform/client',
       '@citadel/platform/server-app',
       '@citadel/platform/persistence',
-      '@citadel/apps/catalog',
-      '@citadel/apps/chat',
-      '@citadel/apps/chat/client',
-      '@citadel/apps/chat/server',
-      '@citadel/apps/chess',
-      '@citadel/apps/chess/client',
-      '@citadel/apps/chess/server',
-      '@citadel/apps/snake',
-      '@citadel/apps/snake/client',
-      '@citadel/apps/snake/server',
+      '@citadel/platform/server',
+      '@citadel/platform/validation',
       '@citadel/app-chat',
       '@citadel/app-chat/client',
       '@citadel/app-chat/server',
+      '@citadel/app-chat/validation',
       '@citadel/app-chess',
       '@citadel/app-chess/client',
       '@citadel/app-chess/server',
@@ -240,15 +229,13 @@ describe('app package import boundaries', () => {
       expect(viteConfig).toContain(alias);
     }
 
-    expect(tsconfig).toContain('packages/platform/app.ts');
-    expect(tsconfig).toContain('src/bundledApps/catalog.ts');
-    expect(tsconfig).toContain('packages/apps/chat/index.ts');
-    expect(viteConfig).toContain('./packages/platform/app.ts');
-    expect(viteConfig).toContain('./src/bundledApps/catalog.ts');
-    expect(viteConfig).toContain('./packages/apps/chat/index.ts');
+    expect(tsconfig).not.toContain('@citadel/apps/');
+    expect(tsconfig).not.toContain('@citadel/apps/catalog');
+    expect(viteConfig).not.toContain('@citadel/apps/');
+    expect(viteConfig).not.toContain('@citadel/apps/catalog');
   });
 
-  it('declares workspace package shells for platform and bundled apps', () => {
+  it('declares workspace package exports for platform and bundled apps', () => {
     const rootPackage = jsonSource<{ workspaces: string[] }>('package.json');
     const platformPackage = jsonSource<{ name: string; exports: Record<string, string> }>(
       'packages/platform/package.json'
@@ -265,7 +252,9 @@ describe('app package import boundaries', () => {
       './app': './app.ts',
       './client': './client.ts',
       './server-app': './server-app.ts',
-      './persistence': './persistence.ts'
+      './persistence': './persistence.ts',
+      './server': './server.ts',
+      './validation': './validation.ts'
     });
 
     for (const appId of appIds) {
@@ -276,11 +265,20 @@ describe('app package import boundaries', () => {
       }>(`packages/apps/${appId}/package.json`);
 
       expect(appPackage.name).toBe(`@citadel/app-${appId}`);
-      expect(appPackage.exports).toEqual({
-        '.': './index.ts',
-        './client': './client.ts',
-        './server': './server.ts'
-      });
+      expect(appPackage.exports).toEqual(
+        appId === 'chat'
+          ? {
+            '.': './index.ts',
+            './client': './client.ts',
+            './server': './server.ts',
+            './validation': './validation.ts'
+          }
+          : {
+            '.': './index.ts',
+            './client': './client.ts',
+            './server': './server.ts'
+          }
+      );
       expect(appPackage.dependencies?.['@citadel/platform']).toBe('0.1.0');
     }
   });
@@ -290,61 +288,31 @@ describe('app package import boundaries', () => {
     expect(source('packages/platform/client.ts').trim()).toBe("export * from './src/client.js';");
     expect(source('packages/platform/server-app.ts').trim()).toBe("export * from './src/serverApp.js';");
     expect(source('packages/platform/persistence.ts').trim()).toBe("export * from './src/persistence.js';");
+    expect(source('packages/platform/server.ts').trim()).toBe("export * from './src/server.js';");
+    expect(source('packages/platform/validation.ts').trim()).toBe("export * from './src/validation.js';");
 
     for (const appId of appIds) {
-      if ((packageOwnedAppIds as readonly string[]).includes(appId)) {
-        expect(source(`packages/apps/${appId}/index.ts`).trim()).toBe("export * from './src/index.js';");
-        expect(source(`packages/apps/${appId}/client.ts`).trim()).toBe("export * from './src/client.js';");
-        expect(source(`packages/apps/${appId}/server.ts`).trim()).toBe("export * from './src/serverEntry.js';");
-      } else {
-        expect(source(`packages/apps/${appId}/index.ts`).trim()).toBe(
-          `export * from '../../../src/apps/${appId}/index.js';`
-        );
-        expect(source(`packages/apps/${appId}/client.ts`).trim()).toBe(
-          `export * from '../../../src/apps/${appId}/client.js';`
-        );
-        expect(source(`packages/apps/${appId}/server.ts`).trim()).toBe(
-          `export * from '../../../src/apps/${appId}/serverEntry.js';`
-        );
+      expect(source(`packages/apps/${appId}/index.ts`).trim()).toBe("export * from './src/index.js';");
+      expect(source(`packages/apps/${appId}/client.ts`).trim()).toBe("export * from './src/client.js';");
+      expect(source(`packages/apps/${appId}/server.ts`).trim()).toBe("export * from './src/serverEntry.js';");
+    }
+    expect(source('packages/apps/chat/validation.ts').trim()).toBe("export * from './src/validation.js';");
+  });
+
+  it('removes legacy compatibility shim files', () => {
+    for (const moduleName of platformEntrypointNames) {
+      expect(exists(`src/platform/${moduleName}.ts`)).toBe(false);
+    }
+
+    for (const appId of appIds) {
+      for (const fileName of appShimFilesById[appId]) {
+        expect(exists(`src/apps/${appId}/${fileName}`)).toBe(false);
       }
     }
-  });
 
-  it('keeps src platform files as thin compatibility shims', () => {
-    for (const moduleName of platformModuleNames) {
-      expect(source(`src/platform/${moduleName}.ts`).trim()).toBe(
-        `export * from '../../packages/platform/src/${moduleName}.js';`
-      );
+    for (const fileName of deletedCompatibilityPaths) {
+      expect(exists(fileName)).toBe(false);
     }
-  });
-
-  it('keeps root shared and persistence files as thin compatibility shims', () => {
-    expect(source('src/shared/platform.ts').trim()).toBe(
-      "export * from '../../packages/platform/src/shared.js';"
-    );
-    expect(source('src/persistence/sqlite.ts').trim()).toBe(
-      "export * from '../../packages/platform/src/sqlite.js';"
-    );
-  });
-
-  it('keeps moved app src files as thin compatibility shims', () => {
-    for (const appId of packageOwnedAppIds) {
-      for (const fileName of packageOwnedAppFiles[appId]) {
-        const exportName = fileName.replace(/\.tsx?$/, '.js');
-
-        expect(source(`src/apps/${appId}/${fileName}`).trim()).toBe(
-          `export * from '../../../packages/apps/${appId}/src/${exportName}';`
-        );
-      }
-    }
-  });
-
-  it('keeps src app registry files as thin compatibility shims', () => {
-    expect(source('src/apps/catalog.ts').trim()).toBe("export * from '../bundledApps/catalog.js';");
-    expect(source('src/apps/serverRegistry.ts').trim()).toBe("export * from '../bundledApps/serverRegistry.js';");
-    expect(source('src/apps/serverServices.ts').trim()).toBe(
-      "export type { ServerAppServices } from '../bundledApps/serverServices.js';"
-    );
   });
 
   it('keeps bundled app assembly on public app package surfaces', () => {

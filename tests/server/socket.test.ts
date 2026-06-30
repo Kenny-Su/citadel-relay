@@ -5,14 +5,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as Client, type Socket } from 'socket.io-client';
 import { createChatServer } from '../../src/server/chatServer.js';
-import { createChatRepository } from '../../src/apps/chat/messageStore.js';
-import { createChessRepository } from '../../src/apps/chess/repository.js';
-import { openCitadelDatabase, type CitadelDatabase } from '../../src/persistence/sqlite.js';
-import type { ChatMessage, TypingUpdatePayload } from '../../src/apps/chat/shared.js';
-import type { ChessState } from '../../src/apps/chess/shared.js';
-import type { SnakeState } from '../../src/apps/snake/shared.js';
-import type { AppEventEnvelope, AppId, PlatformErrorPayload, SpaceState } from '../../src/shared/platform.js';
-import type { AppManifest } from '../../src/platform/appContract.js';
+import { createChatRepository } from '@citadel/app-chat/server';
+import { createChessRepository } from '@citadel/app-chess/server';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import type { ChatMessage, TypingUpdatePayload } from '@citadel/app-chat';
+import type { ChessState } from '@citadel/app-chess';
+import type { SnakeState } from '@citadel/app-snake';
+import type { AppEventEnvelope, AppId, AppManifest, PlatformErrorPayload, SpaceState } from '@citadel/platform/app';
 
 function once<T>(socket: Socket, event: string) {
   return new Promise<T>((resolve) => {

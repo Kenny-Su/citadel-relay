@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_SPACE_ID } from '../../src/shared/platform.js';
-import { MESSAGE_HISTORY_LIMIT, type ChatMessage } from '../../src/apps/chat/shared.js';
-import { createChatRepository, createSqliteMessageStore, type MessageStore } from '../../src/apps/chat/messageStore.js';
+import { DEFAULT_SPACE_ID } from '@citadel/platform/app';
+import { MESSAGE_HISTORY_LIMIT, type ChatMessage } from '@citadel/app-chat';
+import { createChatRepository, createSqliteMessageStore, type MessageStore } from '@citadel/app-chat/server';
 
 function makeMessage(index: number): ChatMessage {
   return {

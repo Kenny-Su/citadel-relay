@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPlatformServer } from '../platform/server.js';
+import { createPlatformServer } from '@citadel/platform/server';
 import { createBundledServerApps, filterAppManifests, getEnabledAppIds } from '../bundledApps/serverRegistry.js';
 import { openCitadelDatabase } from '@citadel/platform/persistence';
 

@@ -1,4 +1,8 @@
 export { chatManifest } from './manifest.js';
+export {
+  MESSAGE_HISTORY_LIMIT,
+  MESSAGE_MAX_LENGTH
+} from './shared.js';
 export type {
   ChatMessage,
   ChatState,
