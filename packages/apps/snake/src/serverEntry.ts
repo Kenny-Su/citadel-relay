@@ -8,3 +8,7 @@ export const snakeServerBundle = {
     return createSnakeApp();
   }
 } satisfies ServerAppBundle<ServerAppServices>;
+
+export function createSnakeServerAppFromServices(services: ServerAppServices) {
+  return snakeServerBundle.createServerApp(services);
+}

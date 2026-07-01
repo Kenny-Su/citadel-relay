@@ -18,6 +18,10 @@ export function resolveChessRepository(services: ChessServerAppServices) {
   return services.chessRepository ?? createChessRepository(services.database.database);
 }
 
+export function createChessServerAppFromServices(services: ChessServerAppServices) {
+  return chessServerBundle.createServerApp(services);
+}
+
 export const chessServerBundle = {
   appId: chessManifest.appId,
   createServerApp(services) {

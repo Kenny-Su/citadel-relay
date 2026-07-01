@@ -25,6 +25,10 @@ export function resolveChatRepository(services: ChatServerAppServices) {
   return services.chatRepository ?? services.messageStore ?? createChatRepository(services.database.database);
 }
 
+export function createChatServerAppFromServices(services: ChatServerAppServices) {
+  return chatServerBundle.createServerApp(services);
+}
+
 export const chatServerBundle = {
   appId: chatManifest.appId,
   createServerApp(services) {

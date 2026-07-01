@@ -8,19 +8,17 @@ import {
 } from './catalog.js';
 import {
   chatServerBundle,
-  resolveChatRepository,
+  createChatServerAppFromServices,
   type ChatRateLimitOptions,
   type ChatRepository,
-  type ChatServerAppServices,
   type MessageStore
 } from '@citadel/app-chat/server';
 import {
   chessServerBundle,
-  resolveChessRepository,
-  type ChessRepository,
-  type ChessServerAppServices
+  createChessServerAppFromServices,
+  type ChessRepository
 } from '@citadel/app-chess/server';
-import { snakeServerBundle } from '@citadel/app-snake/server';
+import { createSnakeServerAppFromServices, snakeServerBundle } from '@citadel/app-snake/server';
 import type { ServerAppServices } from './serverServices.js';
 
 export type { ChatRateLimitOptions } from '@citadel/app-chat/server';
@@ -34,13 +32,6 @@ export type BundledServerAppServices = ServerAppServices & {
   enabledAppIds?: AppId[];
 };
 
-export function resolveBundledRepositories(services: BundledServerAppServices) {
-  return {
-    chatRepository: resolveChatRepository(services),
-    chessRepository: resolveChessRepository(services)
-  };
-}
-
 export { bundledAppManifests } from './catalog.js';
 
 type BundledServerAppBundle =
@@ -48,45 +39,27 @@ type BundledServerAppBundle =
   | typeof chessServerBundle
   | typeof snakeServerBundle;
 
-type BundledRepositoryServices = ReturnType<typeof resolveBundledRepositories>;
-
 type BundledServerAppDefinition = {
   appId: AppId;
   bundle: BundledServerAppBundle;
-  createServerApp(services: BundledServerAppServices, repositories: BundledRepositoryServices): ServerAppModule;
+  createServerApp(services: BundledServerAppServices): ServerAppModule;
 };
 
 const bundledServerAppDefinitions = orderBundledAppEntries({
   chat: {
     appId: chatServerBundle.appId,
     bundle: chatServerBundle,
-    createServerApp(services: BundledServerAppServices, repositories: BundledRepositoryServices) {
-      return chatServerBundle.createServerApp({
-        database: services.database,
-        chatRepository: repositories.chatRepository,
-        messageStore: services.messageStore,
-        messageRateLimit: services.messageRateLimit
-      } satisfies ChatServerAppServices);
-    }
+    createServerApp: createChatServerAppFromServices
   },
   chess: {
     appId: chessServerBundle.appId,
     bundle: chessServerBundle,
-    createServerApp(services: BundledServerAppServices, repositories: BundledRepositoryServices) {
-      return chessServerBundle.createServerApp({
-        database: services.database,
-        chessRepository: repositories.chessRepository
-      } satisfies ChessServerAppServices);
-    }
+    createServerApp: createChessServerAppFromServices
   },
   snake: {
     appId: snakeServerBundle.appId,
     bundle: snakeServerBundle,
-    createServerApp(services: BundledServerAppServices) {
-      return snakeServerBundle.createServerApp({
-        database: services.database
-      } satisfies ServerAppServices);
-    }
+    createServerApp: createSnakeServerAppFromServices
   }
 }) satisfies BundledServerAppDefinition[];
 
@@ -131,10 +104,9 @@ function filterServerAppDefinitions(enabledAppIds: AppId[]) {
 }
 
 export function createBundledServerApps(services: BundledServerAppServices): ServerAppModule[] {
-  const repositories = resolveBundledRepositories(services);
   const definitions = services.enabledAppIds
     ? filterServerAppDefinitions(services.enabledAppIds)
     : bundledServerAppDefinitions;
 
-  return definitions.map((definition) => definition.createServerApp(services, repositories));
+  return definitions.map((definition) => definition.createServerApp(services));
 }

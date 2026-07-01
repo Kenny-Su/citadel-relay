@@ -8,13 +8,21 @@ import {
   createBundledServerApps,
   filterAppManifests,
   filterServerAppBundles,
-  getEnabledAppIds,
-  resolveBundledRepositories
+  getEnabledAppIds
 } from '../../src/bundledApps/serverRegistry.js';
 import { bundledAppDefinitions, bundledAppIds } from '../../src/bundledApps/catalog.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
-import type { ChatRepository } from '@citadel/app-chat/server';
-import type { ChessRepository } from '@citadel/app-chess/server';
+import type { ServerAppContext } from '@citadel/platform/server-app';
+import {
+  createChatServerAppFromServices,
+  resolveChatRepository,
+  type ChatRepository
+} from '@citadel/app-chat/server';
+import {
+  createChessServerAppFromServices,
+  resolveChessRepository,
+  type ChessRepository
+} from '@citadel/app-chess/server';
 import {
   chatManifest as publicChatManifest
 } from '@citadel/app-chat';
@@ -123,7 +131,7 @@ describe('bundled server app registry', () => {
     expect(apps.map((app) => app.appId)).toEqual(['snake', 'chat']);
   });
 
-  it('uses injected repositories when resolving bundled services', () => {
+  it('uses app-owned adapters and injected repositories when creating server modules', () => {
     const chatRepository = {
       listRecentMessages: vi.fn(() => []),
       saveMessage: vi.fn(),
@@ -138,10 +146,35 @@ describe('bundled server app registry', () => {
       close: vi.fn()
     } satisfies ChessRepository;
 
-    expect(resolveBundledRepositories({ database, chatRepository, chessRepository })).toEqual({
+    expect(resolveChatRepository({ database, chatRepository })).toBe(chatRepository);
+    expect(resolveChessRepository({ database, chessRepository })).toBe(chessRepository);
+    expect(createChatServerAppFromServices({ database, chatRepository }).appId).toBe('chat');
+    expect(createChessServerAppFromServices({ database, chessRepository }).appId).toBe('chess');
+
+    const apps = createBundledServerApps({
+      database,
       chatRepository,
-      chessRepository
+      chessRepository,
+      enabledAppIds: ['chat', 'chess']
     });
+    const context: Omit<ServerAppContext, 'participant' | 'socketId'> = {
+      appId: 'chat',
+      spaceId: 'general',
+      participants: [],
+      emitToSpace: vi.fn(),
+      emitToParticipant: vi.fn(),
+      emitSpaceState: vi.fn(),
+      getAppState: () => undefined,
+      setAppState: vi.fn(),
+      clearAppState: vi.fn()
+    };
+
+    apps[0].getInitialState(context);
+    apps[1].getInitialState({ ...context, appId: 'chess' });
+
+    expect(chatRepository.listRecentMessages).toHaveBeenCalledWith('general', 100);
+    expect(chessRepository.getGame).toHaveBeenCalledWith('general');
+    expect(chessRepository.saveGame).toHaveBeenCalled();
   });
 
 });

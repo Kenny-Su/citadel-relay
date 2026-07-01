@@ -122,6 +122,7 @@ const publicRuntimeExports = {
   '@citadel/app-chat/client': ['chatClientApp'],
   '@citadel/app-chat/server': [
     'chatServerBundle',
+    'createChatServerAppFromServices',
     'createChatRepository',
     'createSqliteMessageStore',
     'resolveChatRepository'
@@ -129,10 +130,15 @@ const publicRuntimeExports = {
   '@citadel/app-chat/validation': ['validateMessageBody'],
   '@citadel/app-chess': ['chessManifest'],
   '@citadel/app-chess/client': ['chessClientApp'],
-  '@citadel/app-chess/server': ['chessServerBundle', 'createChessRepository', 'resolveChessRepository'],
+  '@citadel/app-chess/server': [
+    'chessServerBundle',
+    'createChessRepository',
+    'createChessServerAppFromServices',
+    'resolveChessRepository'
+  ],
   '@citadel/app-snake': ['snakeManifest'],
   '@citadel/app-snake/client': ['snakeClientApp'],
-  '@citadel/app-snake/server': ['snakeServerBundle']
+  '@citadel/app-snake/server': ['createSnakeServerAppFromServices', 'snakeServerBundle']
 } as const satisfies Record<string, readonly string[]>;
 
 const forbiddenPackageExportPattern =
@@ -219,6 +225,8 @@ describe('app package import boundaries', () => {
     expect(registry).not.toMatch(
       /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
     );
+    expect(registry).not.toMatch(/ChatServerAppServices|ChessServerAppServices/);
+    expect(registry).not.toMatch(/resolveChatRepository|resolveChessRepository|resolveBundledRepositories/);
   });
 
   it('keeps app client code away from server-only surfaces', () => {

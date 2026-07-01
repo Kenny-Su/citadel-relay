@@ -1,12 +1,8 @@
 import { createPlatformServer, type PlatformServerOptions } from '@citadel/platform/server';
 import type { AppId } from '@citadel/platform/app';
-import { type ChatRepository, type MessageStore } from '@citadel/app-chat/server';
-import { type ChessRepository } from '@citadel/app-chess/server';
-import {
-  createBundledServerApps,
-  filterAppManifests,
-  resolveBundledRepositories
-} from '../bundledApps/serverRegistry.js';
+import { resolveChatRepository, type ChatRepository, type MessageStore } from '@citadel/app-chat/server';
+import { resolveChessRepository, type ChessRepository } from '@citadel/app-chess/server';
+import { createBundledServerApps, filterAppManifests } from '../bundledApps/serverRegistry.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 
 export type ChatServerOptions = Omit<PlatformServerOptions, 'apps'> & {
@@ -37,7 +33,8 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
     messageRateLimit: typeof options === 'string' ? undefined : options.messageRateLimit,
     enabledAppIds: typeof options === 'string' ? undefined : options.enabledAppIds
   };
-  const { chatRepository, chessRepository } = resolveBundledRepositories(services);
+  const chatRepository = resolveChatRepository(services);
+  const chessRepository = resolveChessRepository(services);
   const appManifests = services.enabledAppIds ? filterAppManifests(services.enabledAppIds) : undefined;
 
   return {
