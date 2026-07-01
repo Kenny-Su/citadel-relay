@@ -4,11 +4,11 @@ import { chessAppPackage } from '@citadel/app-chess';
 import { snakeAppPackage } from '@citadel/app-snake';
 import type { BundledAppPackageName } from './config.js';
 
-const bundledAppDescriptorByPackageName = {
+const bundledAppDescriptorByPackageName: Record<BundledAppPackageName, AppPackageDescriptor> = {
   '@citadel/app-chat': chatAppPackage,
   '@citadel/app-chess': chessAppPackage,
   '@citadel/app-snake': snakeAppPackage
-} satisfies Record<BundledAppPackageName, AppPackageDescriptor>;
+};
 
 export function resolveBundledAppDefinitions(
   packageNames: readonly BundledAppPackageName[]

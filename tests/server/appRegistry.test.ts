@@ -13,9 +13,10 @@ import {
 import {
   bundledAppDefinitions,
   bundledAppIds,
+  bundledAppsConfig,
   bundledAppPackageNames,
+  parseBundledAppsConfig,
   resolveBundledAppDefinitions,
-  type BundledAppPackageName
 } from '../../src/bundledApps/catalog.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 import type { ServerAppContext } from '@citadel/platform/server-app';
@@ -66,6 +67,13 @@ describe('bundled server app registry', () => {
   });
 
   it('exposes bundled manifests in app order', () => {
+    expect(bundledAppsConfig).toEqual({
+      packages: [
+        '@citadel/app-chat',
+        '@citadel/app-chess',
+        '@citadel/app-snake'
+      ]
+    });
     expect(bundledAppPackageNames).toEqual([
       '@citadel/app-chat',
       '@citadel/app-chess',
@@ -108,6 +116,20 @@ describe('bundled server app registry', () => {
   });
 
   it('resolves declarative bundled app package config with validation', () => {
+    expect(parseBundledAppsConfig({
+      packages: [
+        '@citadel/app-chat',
+        '@citadel/app-chess',
+        '@citadel/app-snake'
+      ]
+    })).toEqual(bundledAppsConfig);
+    expect(() => parseBundledAppsConfig({})).toThrow('Bundled apps config must contain a packages array');
+    expect(() => parseBundledAppsConfig({ packages: '@citadel/app-chat' })).toThrow(
+      'Bundled apps config packages must be an array'
+    );
+    expect(() => parseBundledAppsConfig({ packages: ['@citadel/app-chat', 7] })).toThrow(
+      'Bundled apps config packages must contain only strings'
+    );
     expect(resolveBundledAppDefinitions(bundledAppPackageNames)).toEqual(bundledAppDefinitions);
     expect(resolveBundledAppDefinitions([
       '@citadel/app-snake',
@@ -118,7 +140,7 @@ describe('bundled server app registry', () => {
       '@citadel/app-chat'
     ])).toThrow('Duplicate bundled app id: chat');
     expect(() => resolveBundledAppDefinitions([
-      '@citadel/app-missing' as BundledAppPackageName
+      '@citadel/app-missing'
     ])).toThrow('Unknown bundled app package: @citadel/app-missing');
   });
 

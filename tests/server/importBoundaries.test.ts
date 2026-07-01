@@ -62,6 +62,7 @@ const deletedCompatibilityPaths = [
 ] as const;
 
 const bundledAppAssemblyFiles = [
+  'bundled-apps.json',
   'src/bundledApps/config.ts',
   'src/bundledApps/definitions.ts',
   'src/bundledApps/resolver.ts',
@@ -94,6 +95,10 @@ type PackageJson = {
   exports: Record<string, PackageExportTarget>;
   scripts: Record<string, string>;
   dependencies?: Record<string, string>;
+};
+
+type BundledAppsJson = {
+  packages: string[];
 };
 
 const packagePaths = [
@@ -529,6 +534,7 @@ describe('app package import boundaries', () => {
   });
 
   it('keeps bundled app assembly on public app package surfaces', () => {
+    const bundledApps = jsonSource<BundledAppsJson>('bundled-apps.json');
     const config = source('src/bundledApps/config.ts');
     const definitions = source('src/bundledApps/definitions.ts');
     const resolver = source('src/bundledApps/resolver.ts');
@@ -536,8 +542,17 @@ describe('app package import boundaries', () => {
     const serverRegistry = source('src/bundledApps/serverRegistry.ts');
     const clientRegistry = source('src/client/appRegistry.tsx');
 
+    expect(bundledApps.packages).toEqual([
+      '@citadel/app-chat',
+      '@citadel/app-chess',
+      '@citadel/app-snake'
+    ]);
+    expect(config).toContain("from '../../bundled-apps.json'");
+    expect(config).not.toContain("'@citadel/app-chat'");
+    expect(config).not.toContain("'@citadel/app-chess'");
+    expect(config).not.toContain("'@citadel/app-snake'");
+
     for (const appId of appIds) {
-      expect(config).toContain(`'@citadel/app-${appId}'`);
       expect(definitions).not.toContain(`from '@citadel/app-${appId}'`);
       expect(definitions).not.toContain(`@citadel/app-${appId}/client`);
       expect(definitions).not.toContain(`@citadel/app-${appId}/server`);
