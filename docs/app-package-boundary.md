@@ -10,7 +10,7 @@ Each bundled app exposes three environment-specific surfaces:
 - `packages/apps/<app>/src/client.tsx`: browser client registration, `ClientAppModule`, and view wiring.
 - `packages/apps/<app>/src/serverEntry.ts`: server registration, bundle, repository resolver, and server-only exports.
 
-Bundled app order is declared as package names in `bundled-apps.json`. Each app package declares a `citadel` metadata block in its `package.json`; that package manifest metadata is the app discovery contract. `src/bundledApps/config.ts` validates the selection data, generated resolver data mirrors the selected package metadata, and `src/bundledApps/definitions.ts` derives ordered manifests from that descriptor list. Client and server registries derive their ordered app lists from the descriptor list, while keeping client and server registrations in environment-specific package surfaces.
+Bundled app order is declared as installed package names in `bundled-apps.json`. Each app package declares a `citadel` metadata block in its `package.json`; that package manifest metadata is the app discovery contract. `src/bundledApps/config.ts` validates the selection data, generated resolver data mirrors the selected package metadata, and `src/bundledApps/definitions.ts` derives ordered manifests from that descriptor list. Client and server registries derive their ordered app lists from the descriptor list, while keeping client and server registrations in environment-specific package surfaces.
 
 Platform contracts are split by environment inside `packages/platform/src`:
 
@@ -27,13 +27,13 @@ Bundled apps import platform APIs through small app-facing facades. These are th
 - `@citadel/platform/server`: host server runtime.
 - `@citadel/platform/validation`: platform validation helpers.
 
-The current repo resolves package-shaped imports through workspace package manifests:
+The current repo resolves package-shaped imports through installed workspace packages, currently linked into `node_modules` by npm workspaces:
 
 - `@citadel/platform/app`, `@citadel/platform/client`, `@citadel/platform/server-app`, and `@citadel/platform/persistence`.
 - `@citadel/platform/server` and `@citadel/platform/validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` with `./client` and `./server` surfaces.
 
-Workspace packages exist under `packages/` as the scaffold for the source split. They keep thin TypeScript entrypoints as package-local build inputs:
+Workspace packages exist under `packages/` as the current local development shape for the source split. They keep thin TypeScript entrypoints as package-local build inputs:
 
 - `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, `./persistence`, `./server`, and `./validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
@@ -70,7 +70,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 ## Import Rules
 
 - Platform core imports only platform contracts and generic server modules. It must not import concrete app internals.
-- `bundled-apps.json` declares app package names only.
+- `bundled-apps.json` declares installed app package names only.
 - App `package.json` files declare Citadel metadata, including manifest data and client/server registration subpaths and export names.
 - The neutral bundled app config validates the JSON selection data.
 - `src/bundledApps/generatedResolver.ts` is generated from app package manifest metadata and must not statically import configured app package descriptors.

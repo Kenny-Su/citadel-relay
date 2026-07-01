@@ -1,10 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = join(rootDir, 'bundled-apps.json');
-const rootPackagePath = join(rootDir, 'package.json');
 const outputs = [
   {
     path: join(rootDir, 'src/bundledApps/generatedResolver.ts'),
@@ -21,8 +20,8 @@ const outputs = [
 ];
 const checkOnly = process.argv.includes('--check');
 
-function readConfig() {
-  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+export function readConfig(path = configPath) {
+  const config = JSON.parse(readFileSync(path, 'utf8'));
 
   if (!config || typeof config !== 'object' || !Array.isArray(config.packages)) {
     throw new Error('bundled-apps.json must contain a packages array');
@@ -39,30 +38,62 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function readWorkspacePackageManifests() {
-  const rootPackage = readJson(rootPackagePath);
-  const workspaces = Array.isArray(rootPackage.workspaces) ? rootPackage.workspaces : [];
+export function resolveInstalledPackageJsonPath(packageName, options = {}) {
+  validatePackageName(packageName);
 
-  return new Map(workspaces.map((workspacePath) => {
-    const packageJsonPath = join(rootDir, workspacePath, 'package.json');
-    const packageJson = readJson(packageJsonPath);
-
-    return [packageJson.name, { packageJson, packageJsonPath }];
-  }));
+  return join(options.rootDir ?? rootDir, 'node_modules', ...packageName.split('/'), 'package.json');
 }
 
-function resolveAppPackages(config) {
-  const workspacePackages = readWorkspacePackageManifests();
+export function validatePackageName(packageName) {
+  if (typeof packageName !== 'string' || packageName.length === 0) {
+    throw new Error('Bundled app package names must be non-empty strings');
+  }
+
+  if (isAbsolute(packageName) || packageName.includes('\\') || packageName.includes('\0')) {
+    throw new Error(`Invalid bundled app package name: ${packageName}`);
+  }
+
+  const parts = packageName.split('/');
+  const isScoped = packageName.startsWith('@');
+  const expectedPartCount = isScoped ? 2 : 1;
+  const namePattern = isScoped ? /^@[a-z0-9][a-z0-9._~-]*$/i : /^[a-z0-9][a-z0-9._~-]*$/i;
+  const segmentPattern = /^[a-z0-9][a-z0-9._~-]*$/i;
+
+  if (parts.length !== expectedPartCount) {
+    throw new Error(`Invalid bundled app package name: ${packageName}`);
+  }
+
+  for (const part of parts) {
+    if (part === '' || part === '.' || part === '..' || part.startsWith('.')) {
+      throw new Error(`Invalid bundled app package name: ${packageName}`);
+    }
+  }
+
+  if (isScoped) {
+    if (!namePattern.test(parts[0]) || !segmentPattern.test(parts[1])) {
+      throw new Error(`Invalid bundled app package name: ${packageName}`);
+    }
+  } else if (!namePattern.test(parts[0])) {
+    throw new Error(`Invalid bundled app package name: ${packageName}`);
+  }
+}
+
+export function readInstalledPackageManifest(packageName, options = {}) {
+  const packageJsonPath = resolveInstalledPackageJsonPath(packageName, options);
+
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(`Bundled app package ${packageName} is not installed at ${relative(options.rootDir ?? rootDir, packageJsonPath)}`);
+  }
+
+  return readJson(packageJsonPath);
+}
+
+export function resolveAppPackages(config, options = {}) {
   const seenAppIds = new Set();
 
   return config.packages.map((packageName) => {
-    const manifest = workspacePackages.get(packageName);
-
-    if (!manifest) {
-      throw new Error(`Bundled app package ${packageName} was not found in root workspaces`);
-    }
-
-    const descriptor = parseCitadelPackageMetadata(packageName, manifest.packageJson);
+    const packageJson = readInstalledPackageManifest(packageName, options);
+    const descriptor = parseCitadelPackageMetadata(packageName, packageJson);
 
     if (seenAppIds.has(descriptor.appId)) {
       throw new Error(`Duplicate bundled app id: ${descriptor.appId}`);
@@ -73,7 +104,7 @@ function resolveAppPackages(config) {
   });
 }
 
-function parseCitadelPackageMetadata(packageName, packageJson) {
+export function parseCitadelPackageMetadata(packageName, packageJson) {
   if (packageJson.name !== packageName) {
     throw new Error(`Bundled app package mismatch: configured ${packageName}, package.json declares ${packageJson.name}`);
   }
@@ -176,7 +207,7 @@ function generateDescriptorLiteral(appPackage) {
   ].join('\n');
 }
 
-function generateDescriptorResolver(appPackages) {
+export function generateDescriptorResolver(appPackages) {
   const entries = appPackages.map((appPackage) => (
     `  ${literal(appPackage.packageName)}: ${generateDescriptorLiteral(appPackage).replace(/\n/g, '\n  ')}`
   ));
@@ -192,7 +223,7 @@ function generateDescriptorResolver(appPackages) {
   ].join('\n');
 }
 
-function generateClientRegistry(appPackages) {
+export function generateClientRegistry(appPackages) {
   const imports = appPackages.map((appPackage, index) => (
     `import { ${appPackage.client.registrationExport} as bundledClientRegistration${index} } from '${importPath(appPackage.packageName, appPackage.client.subpath)}';`
   ));
@@ -212,7 +243,7 @@ function generateClientRegistry(appPackages) {
   ].join('\n');
 }
 
-function generateServerRegistry(appPackages) {
+export function generateServerRegistry(appPackages) {
   const imports = appPackages.map((appPackage, index) => (
     `import { ${appPackage.server.registrationExport} as bundledServerRegistration${index} } from '${importPath(appPackage.packageName, appPackage.server.subpath)}';`
   ));
@@ -232,24 +263,34 @@ function generateServerRegistry(appPackages) {
   ].join('\n');
 }
 
-const config = readConfig();
-const appPackages = resolveAppPackages(config);
+export function runGenerator(options = {}) {
+  const generationRootDir = options.rootDir ?? rootDir;
+  const generationOutputs = options.outputs ?? outputs;
+  const config = readConfig(options.configPath ?? configPath);
+  const appPackages = resolveAppPackages(config, { rootDir: generationRootDir });
 
-if (checkOnly) {
-  for (const output of outputs) {
-    if (!existsSync(output.path)) {
-      throw new Error(`${relative(rootDir, output.path)} is missing. Run npm run generate:bundled-apps.`);
+  if (options.checkOnly ?? checkOnly) {
+    for (const output of generationOutputs) {
+      if (!existsSync(output.path)) {
+        throw new Error(`${relative(generationRootDir, output.path)} is missing. Run npm run generate:bundled-apps.`);
+      }
+
+      const currentSource = readFileSync(output.path, 'utf8');
+      const nextSource = output.generate(appPackages);
+
+      if (currentSource !== nextSource) {
+        throw new Error(`${relative(generationRootDir, output.path)} is stale. Run npm run generate:bundled-apps.`);
+      }
     }
 
-    const currentSource = readFileSync(output.path, 'utf8');
-    const nextSource = output.generate(appPackages);
-
-    if (currentSource !== nextSource) {
-      throw new Error(`${relative(rootDir, output.path)} is stale. Run npm run generate:bundled-apps.`);
-    }
+    return;
   }
-} else {
-  for (const output of outputs) {
+
+  for (const output of generationOutputs) {
     writeFileSync(output.path, output.generate(appPackages));
   }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  runGenerator();
 }

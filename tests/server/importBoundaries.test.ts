@@ -617,6 +617,7 @@ describe('app package import boundaries', () => {
     const bundledApps = jsonSource<BundledAppsJson>('bundled-apps.json');
     const config = source('src/bundledApps/config.ts');
     const definitions = source('src/bundledApps/definitions.ts');
+    const generator = source('scripts/generate-bundled-apps.mjs');
     const generatedClientRegistry = source('src/client/generatedAppRegistry.ts');
     const generatedResolver = source('src/bundledApps/generatedResolver.ts');
     const generatedServerRegistry = source('src/bundledApps/generatedServerRegistry.ts');
@@ -634,6 +635,10 @@ describe('app package import boundaries', () => {
     expect(config).not.toContain("'@citadel/app-chat'");
     expect(config).not.toContain("'@citadel/app-chess'");
     expect(config).not.toContain("'@citadel/app-snake'");
+    expect(generator).toContain("'node_modules'");
+    expect(generator).not.toContain('rootPackagePath');
+    expect(generator).not.toContain('readWorkspacePackageManifests');
+    expect(generator).not.toContain('root workspaces');
 
     for (const appId of appIds) {
       const metadata = expectedCitadelMetadataByAppId[appId];
