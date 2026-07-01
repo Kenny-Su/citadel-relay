@@ -27,31 +27,40 @@ Bundled apps import platform APIs through small app-facing facades. These are th
 - `@citadel/platform/server`: host server runtime.
 - `@citadel/platform/validation`: platform validation helpers.
 
-The current repo uses package-shaped aliases for the split:
+The current repo resolves package-shaped imports through workspace package manifests:
 
 - `@citadel/platform/app`, `@citadel/platform/client`, `@citadel/platform/server-app`, and `@citadel/platform/persistence`.
 - `@citadel/platform/server` and `@citadel/platform/validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` with `./client` and `./server` surfaces.
 
-Workspace packages exist under `packages/` as the scaffold for the source split. They expose thin TypeScript entrypoints:
+Workspace packages exist under `packages/` as the scaffold for the source split. They keep thin TypeScript entrypoints as package-local build inputs:
 
-- `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, and `./persistence`.
+- `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, `./persistence`, `./server`, and `./validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
-- Each workspace package has a package-local no-emit TypeScript check. These checks prove package isolation, but they do not produce JavaScript, declarations, or publishable package artifacts yet.
-- Each workspace package also has a local package build that emits JavaScript and declarations into its ignored `dist/` directory. The host still consumes TypeScript source aliases in this step; package `exports` move to built artifacts in a later host-consumes-dist step.
+- Each workspace package has a package-local no-emit TypeScript check. These checks prove package isolation without producing JavaScript or declarations.
+- Each workspace package also has a local package build that emits JavaScript and declarations into its ignored `dist/` directory. Package `exports` point at those built artifacts, and the host consumes packages through workspace package resolution rather than source aliases.
 
 Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
 All bundled apps are source-owning workspace packages: their implementations live under `packages/apps/<app>/src`.
 
 Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint or to the bundled registry adapter.
 
-For example, a future package can map these to exports like:
+Package exports map each public surface to built JavaScript and declarations, for example:
 
 ```json
 {
-  ".": "./index.js",
-  "./client": "./client.js",
-  "./server": "./serverEntry.js"
+  ".": {
+    "types": "./dist/index.d.ts",
+    "import": "./dist/index.js"
+  },
+  "./client": {
+    "types": "./dist/client.d.ts",
+    "import": "./dist/client.js"
+  },
+  "./server": {
+    "types": "./dist/server.d.ts",
+    "import": "./dist/server.js"
+  }
 }
 ```
 

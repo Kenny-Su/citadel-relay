@@ -75,6 +75,11 @@ type PackageTsconfig = {
   compilerOptions?: Record<string, unknown>;
 };
 
+type PackageExportTarget = string | {
+  types: string;
+  import: string;
+};
+
 const packagePaths = [
   'packages/platform',
   'packages/apps/chat',
@@ -216,43 +221,24 @@ describe('app package import boundaries', () => {
     }
   });
 
-  it('declares only real package-shaped aliases for TypeScript and Vite', () => {
-    const tsconfig = source('tsconfig.json');
+  it('resolves package imports through workspace package manifests instead of source aliases', () => {
+    const tsconfig = jsonSource<PackageTsconfig>('tsconfig.json');
+    const packageBase = jsonSource<PackageTsconfig>('tsconfig.package-base.json');
     const viteConfig = source('vite.config.ts');
 
-    for (const alias of [
-      '@citadel/platform/app',
-      '@citadel/platform/client',
-      '@citadel/platform/server-app',
-      '@citadel/platform/persistence',
-      '@citadel/platform/server',
-      '@citadel/platform/validation',
-      '@citadel/app-chat',
-      '@citadel/app-chat/client',
-      '@citadel/app-chat/server',
-      '@citadel/app-chat/validation',
-      '@citadel/app-chess',
-      '@citadel/app-chess/client',
-      '@citadel/app-chess/server',
-      '@citadel/app-snake',
-      '@citadel/app-snake/client',
-      '@citadel/app-snake/server'
-    ]) {
-      expect(tsconfig).toContain(alias);
-      expect(viteConfig).toContain(alias);
-    }
-
-    expect(tsconfig).not.toContain('@citadel/apps/');
-    expect(tsconfig).not.toContain('@citadel/apps/catalog');
-    expect(viteConfig).not.toContain('@citadel/apps/');
-    expect(viteConfig).not.toContain('@citadel/apps/catalog');
+    expect(tsconfig.compilerOptions).not.toHaveProperty('paths');
+    expect(packageBase.compilerOptions).not.toHaveProperty('paths');
+    expect(viteConfig).not.toContain('resolve:');
+    expect(viteConfig).not.toContain('alias:');
+    expect(viteConfig).not.toContain('packages/apps/');
+    expect(viteConfig).not.toContain('packages/platform/');
   });
 
   it('declares workspace package exports for platform and bundled apps', () => {
     const rootPackage = jsonSource<{ workspaces: string[]; scripts: Record<string, string> }>('package.json');
     const platformPackage = jsonSource<{
       name: string;
-      exports: Record<string, string>;
+      exports: Record<string, PackageExportTarget>;
       scripts: Record<string, string>;
     }>(
       'packages/platform/package.json'
@@ -262,21 +248,28 @@ describe('app package import boundaries', () => {
       'npm run typecheck:client && npm run typecheck:server && npm run typecheck:packages'
     );
     expect(rootPackage.scripts['typecheck:packages']).toBe('npm run typecheck --workspaces --if-present');
-    expect(rootPackage.scripts.build).toBe('npm run typecheck && npm run build:packages && npm run build:client');
-    expect(rootPackage.scripts['build:packages']).toBe('npm run build --workspaces --if-present');
+    expect(rootPackage.scripts.predev).toBe('npm run build:packages');
+    expect(rootPackage.scripts.prestart).toBe('npm run build:packages');
+    expect(rootPackage.scripts.pretest).toBe('npm run build:packages');
+    expect(rootPackage.scripts.build).toBe('npm run build:packages && npm run typecheck && npm run build:client');
+    expect(rootPackage.scripts['build:packages']).toBe('npm run build:platform && npm run build:apps');
+    expect(rootPackage.scripts['build:platform']).toBe('npm run build -w @citadel/platform');
+    expect(rootPackage.scripts['build:apps']).toBe(
+      'npm run build -w @citadel/app-chat && npm run build -w @citadel/app-chess && npm run build -w @citadel/app-snake'
+    );
     expect(rootPackage.scripts['clean:packages']).toBe('npm run clean --workspaces --if-present');
     expect(rootPackage.workspaces).toEqual([...packagePaths]);
     expect(platformPackage.name).toBe('@citadel/platform');
     expect(platformPackage.exports).toEqual({
-      './app': './app.ts',
-      './client': './client.ts',
-      './server-app': './server-app.ts',
-      './persistence': './persistence.ts',
-      './server': './server.ts',
-      './validation': './validation.ts'
+      './app': { types: './dist/app.d.ts', import: './dist/app.js' },
+      './client': { types: './dist/client.d.ts', import: './dist/client.js' },
+      './server-app': { types: './dist/server-app.d.ts', import: './dist/server-app.js' },
+      './persistence': { types: './dist/persistence.d.ts', import: './dist/persistence.js' },
+      './server': { types: './dist/server.d.ts', import: './dist/server.js' },
+      './validation': { types: './dist/validation.d.ts', import: './dist/validation.js' }
     });
-    expect(Object.values(platformPackage.exports).every((entry) => entry.endsWith('.ts'))).toBe(true);
-    expect(Object.values(platformPackage.exports).every((entry) => !entry.startsWith('./dist/'))).toBe(true);
+    expect(Object.values(platformPackage.exports).every((entry) => typeof entry !== 'string')).toBe(true);
+    expect(Object.values(platformPackage.exports).every((entry) => typeof entry !== 'string' && entry.import.startsWith('./dist/'))).toBe(true);
     expect(platformPackage.scripts.build).toBe('tsc -p tsconfig.build.json');
     expect(platformPackage.scripts.clean).toBe("node -e \"fs.rmSync('dist', { recursive: true, force: true })\"");
     expect(platformPackage.scripts.typecheck).toBe('tsc -p tsconfig.json --noEmit');
@@ -284,7 +277,7 @@ describe('app package import boundaries', () => {
     for (const appId of appIds) {
       const appPackage = jsonSource<{
         name: string;
-        exports: Record<string, string>;
+        exports: Record<string, PackageExportTarget>;
         scripts: Record<string, string>;
         dependencies?: Record<string, string>;
       }>(`packages/apps/${appId}/package.json`);
@@ -293,19 +286,19 @@ describe('app package import boundaries', () => {
       expect(appPackage.exports).toEqual(
         appId === 'chat'
           ? {
-            '.': './index.ts',
-            './client': './client.ts',
-            './server': './server.ts',
-            './validation': './validation.ts'
+            '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+            './client': { types: './dist/client.d.ts', import: './dist/client.js' },
+            './server': { types: './dist/server.d.ts', import: './dist/server.js' },
+            './validation': { types: './dist/validation.d.ts', import: './dist/validation.js' }
           }
           : {
-            '.': './index.ts',
-            './client': './client.ts',
-            './server': './server.ts'
+            '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+            './client': { types: './dist/client.d.ts', import: './dist/client.js' },
+            './server': { types: './dist/server.d.ts', import: './dist/server.js' }
           }
       );
-      expect(Object.values(appPackage.exports).every((entry) => entry.endsWith('.ts'))).toBe(true);
-      expect(Object.values(appPackage.exports).every((entry) => !entry.startsWith('./dist/'))).toBe(true);
+      expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string')).toBe(true);
+      expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string' && entry.import.startsWith('./dist/'))).toBe(true);
       expect(appPackage.scripts.build).toBe('tsc -p tsconfig.build.json');
       expect(appPackage.scripts.clean).toBe("node -e \"fs.rmSync('dist', { recursive: true, force: true })\"");
       expect(appPackage.scripts.typecheck).toBe('tsc -p tsconfig.json --noEmit');
@@ -313,10 +306,27 @@ describe('app package import boundaries', () => {
     }
   });
 
+  it('loads public package surfaces from built workspace package artifacts', async () => {
+    for (const packagePath of packagePaths) {
+      expect(exists(`${packagePath}/dist`)).toBe(true);
+    }
+
+    const platformApp = await import('@citadel/platform/app');
+    const chat = await import('@citadel/app-chat');
+    const chatClient = await import('@citadel/app-chat/client');
+    const chatServer = await import('@citadel/app-chat/server');
+
+    expect(platformApp.DEFAULT_SPACE_ID).toBe('general');
+    expect(chat.chatManifest.appId).toBe('chat');
+    expect(chatClient.chatClientApp.appId).toBe('chat');
+    expect(chatServer.chatServerBundle.appId).toBe('chat');
+  });
+
   it('checks each package through a package-local no-emit tsconfig', () => {
     const packageBase = jsonSource<PackageTsconfig>('tsconfig.package-base.json');
 
     expect(packageBase.compilerOptions?.noEmit).toBe(true);
+    expect(packageBase.compilerOptions).not.toHaveProperty('paths');
     expect(packageBase.compilerOptions).not.toHaveProperty('declaration');
     expect(packageBase.compilerOptions).not.toHaveProperty('emitDeclarationOnly');
     expect(packageBase.compilerOptions).not.toHaveProperty('outDir');
@@ -361,14 +371,7 @@ describe('app package import boundaries', () => {
       } else {
         expect(buildConfig.compilerOptions?.outDir).toBe('dist');
         expect(buildConfig.compilerOptions?.rootDir).toBe('.');
-        expect(buildConfig.compilerOptions?.paths).toMatchObject({
-          '@citadel/platform/app': ['packages/platform/dist/app.d.ts'],
-          '@citadel/platform/client': ['packages/platform/dist/client.d.ts'],
-          '@citadel/platform/server-app': ['packages/platform/dist/server-app.d.ts'],
-          '@citadel/platform/persistence': ['packages/platform/dist/persistence.d.ts'],
-          '@citadel/platform/server': ['packages/platform/dist/server.d.ts'],
-          '@citadel/platform/validation': ['packages/platform/dist/validation.d.ts']
-        });
+        expect(buildConfig.compilerOptions).not.toHaveProperty('paths');
       }
       expect(buildConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
     }

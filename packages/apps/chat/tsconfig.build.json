@@ -2,15 +2,7 @@
   "extends": "../../../tsconfig.package-build-base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": ".",
-    "paths": {
-      "@citadel/platform/app": ["packages/platform/dist/app.d.ts"],
-      "@citadel/platform/client": ["packages/platform/dist/client.d.ts"],
-      "@citadel/platform/server-app": ["packages/platform/dist/server-app.d.ts"],
-      "@citadel/platform/persistence": ["packages/platform/dist/persistence.d.ts"],
-      "@citadel/platform/server": ["packages/platform/dist/server.d.ts"],
-      "@citadel/platform/validation": ["packages/platform/dist/validation.d.ts"]
-    }
+    "rootDir": "."
   },
   "include": ["*.ts", "src/**/*.ts", "src/**/*.tsx"]
 }
