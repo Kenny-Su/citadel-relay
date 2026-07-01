@@ -10,7 +10,13 @@ import {
   filterServerAppBundles,
   getEnabledAppIds
 } from '../../src/bundledApps/serverRegistry.js';
-import { bundledAppDefinitions, bundledAppIds } from '../../src/bundledApps/catalog.js';
+import {
+  bundledAppDefinitions,
+  bundledAppIds,
+  bundledAppPackageNames,
+  resolveBundledAppDefinitions,
+  type BundledAppPackageName
+} from '../../src/bundledApps/catalog.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 import type { ServerAppContext } from '@citadel/platform/server-app';
 import {
@@ -60,6 +66,11 @@ describe('bundled server app registry', () => {
   });
 
   it('exposes bundled manifests in app order', () => {
+    expect(bundledAppPackageNames).toEqual([
+      '@citadel/app-chat',
+      '@citadel/app-chess',
+      '@citadel/app-snake'
+    ]);
     expect(bundledAppDefinitions.map((definition) => definition.appId)).toEqual(bundledAppIds);
     expect(bundledAppDefinitions.map((definition) => definition.manifest)).toEqual(bundledAppManifests);
     expect(bundledAppDefinitions.map((definition) => definition.packageName)).toEqual([
@@ -94,6 +105,21 @@ describe('bundled server app registry', () => {
       bundledAppIds
     );
     expect(bundledServerAppBundles.map((bundle) => bundle.appId)).toEqual(bundledAppIds);
+  });
+
+  it('resolves declarative bundled app package config with validation', () => {
+    expect(resolveBundledAppDefinitions(bundledAppPackageNames)).toEqual(bundledAppDefinitions);
+    expect(resolveBundledAppDefinitions([
+      '@citadel/app-snake',
+      '@citadel/app-chat'
+    ]).map((definition) => definition.appId)).toEqual(['snake', 'chat']);
+    expect(() => resolveBundledAppDefinitions([
+      '@citadel/app-chat',
+      '@citadel/app-chat'
+    ])).toThrow('Duplicate bundled app id: chat');
+    expect(() => resolveBundledAppDefinitions([
+      '@citadel/app-missing' as BundledAppPackageName
+    ])).toThrow('Unknown bundled app package: @citadel/app-missing');
   });
 
   it('exposes app manifests and server registrations from environment entrypoints', () => {

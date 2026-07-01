@@ -62,7 +62,9 @@ const deletedCompatibilityPaths = [
 ] as const;
 
 const bundledAppAssemblyFiles = [
+  'src/bundledApps/config.ts',
   'src/bundledApps/definitions.ts',
+  'src/bundledApps/resolver.ts',
   'src/bundledApps/catalog.ts',
   'src/bundledApps/serverRegistry.ts',
   'src/client/appRegistry.tsx'
@@ -527,15 +529,21 @@ describe('app package import boundaries', () => {
   });
 
   it('keeps bundled app assembly on public app package surfaces', () => {
+    const config = source('src/bundledApps/config.ts');
     const definitions = source('src/bundledApps/definitions.ts');
+    const resolver = source('src/bundledApps/resolver.ts');
     const catalog = source('src/bundledApps/catalog.ts');
     const serverRegistry = source('src/bundledApps/serverRegistry.ts');
     const clientRegistry = source('src/client/appRegistry.tsx');
 
     for (const appId of appIds) {
-      expect(definitions).toContain(`from '@citadel/app-${appId}'`);
+      expect(config).toContain(`'@citadel/app-${appId}'`);
+      expect(definitions).not.toContain(`from '@citadel/app-${appId}'`);
       expect(definitions).not.toContain(`@citadel/app-${appId}/client`);
       expect(definitions).not.toContain(`@citadel/app-${appId}/server`);
+      expect(resolver).toContain(`from '@citadel/app-${appId}'`);
+      expect(resolver).not.toContain(`@citadel/app-${appId}/client`);
+      expect(resolver).not.toContain(`@citadel/app-${appId}/server`);
       expect(catalog).not.toContain(`from '@citadel/app-${appId}'`);
       expect(catalog).not.toContain(`@citadel/apps/${appId}`);
       expect(serverRegistry).toContain(`from '@citadel/app-${appId}/server'`);
@@ -545,6 +553,8 @@ describe('app package import boundaries', () => {
       expect(clientRegistry).not.toContain(`@citadel/app-${appId}/server`);
     }
     expect(catalog).toContain("from './definitions.js'");
+    expect(definitions).toContain("from './config.js'");
+    expect(definitions).toContain("from './resolver.js'");
     expect(serverRegistry).toContain('orderBundledAppEntries');
     expect(clientRegistry).toContain('orderBundledAppEntries');
     for (const assemblyFile of bundledAppAssemblyFiles) {
