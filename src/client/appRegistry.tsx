@@ -1,14 +1,11 @@
 import type { AppEventEnvelope, AppId, AppManifest } from '@citadel/platform/app';
 import type { ClientAppModule, ClientAppRegistration } from '@citadel/platform/client';
-import type { ChatState } from '@citadel/app-chat';
-import type { ChessState } from '@citadel/app-chess';
-import type { SnakeState } from '@citadel/app-snake';
 import { bundledAppDefinitions } from '../bundledApps/catalog';
 import { bundledClientRegistrationByPackageName } from './generatedAppRegistry';
 
 export type { AppViewProps, ClientAppModule } from '@citadel/platform/client';
 
-type BundledClientAppRegistration = ClientAppRegistration<any>;
+type BundledClientAppRegistration = ClientAppRegistration<unknown>;
 
 const bundledClientAppDefinitions = bundledAppDefinitions.map((definition) => (
   bundledClientRegistrationByPackageName[definition.packageName]
@@ -16,11 +13,11 @@ const bundledClientAppDefinitions = bundledAppDefinitions.map((definition) => (
 
 export const allClientApps = bundledClientAppDefinitions.map(
   (registration) => registration.clientApp
-) satisfies ClientAppModule<any>[];
+) satisfies ClientAppModule<unknown>[];
 
 export const clientApps = allClientApps;
 
-export const appById = new Map<AppId, ClientAppModule<any>>(allClientApps.map((app) => [app.appId, app]));
+export const appById = new Map<AppId, ClientAppModule<unknown>>(allClientApps.map((app) => [app.appId, app]));
 
 export function filterClientApps(enabledAppIds: AppId[]) {
   const enabled = new Set(enabledAppIds);
@@ -32,14 +29,14 @@ export function filterClientApps(enabledAppIds: AppId[]) {
 export function createClientAppsFromManifests(
   manifests: unknown,
   enabledAppIds?: AppId[]
-): ClientAppModule<any>[] | null {
+): ClientAppModule<unknown>[] | null {
   if (!Array.isArray(manifests)) {
     return null;
   }
 
   const enabled = enabledAppIds ? new Set(enabledAppIds) : null;
   const seen = new Set<AppId>();
-  const apps: ClientAppModule<any>[] = [];
+  const apps: ClientAppModule<unknown>[] = [];
 
   for (const manifest of manifests) {
     if (!isClientManifest(manifest) || seen.has(manifest.appId)) {
@@ -82,7 +79,7 @@ function isClientManifest(value: unknown): value is Pick<AppManifest, 'appId' | 
   ) && typeof manifest.label === 'string' && typeof manifest.defaultSpaceId === 'string';
 }
 
-export type KnownAppState = ChatState | ChessState | SnakeState;
+export type KnownAppState = unknown;
 
 export function isKnownAppEvent(event: unknown): event is AppEventEnvelope {
   return Boolean(event && typeof event === 'object' && 'appId' in event && 'type' in event);

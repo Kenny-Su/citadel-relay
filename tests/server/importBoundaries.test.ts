@@ -678,6 +678,7 @@ describe('app package import boundaries', () => {
       expect(serverRegistry).not.toContain(`${appId}ServerRegistration`);
       expect(serverRegistry).not.toContain(`@citadel/app-${appId}/client`);
       expect(serverRegistry).not.toContain(`@citadel/apps/${appId}`);
+      expect(clientRegistry).not.toContain(`from '@citadel/app-${appId}'`);
       expect(clientRegistry).not.toContain(`from '@citadel/app-${appId}/client'`);
       expect(clientRegistry).not.toContain(`${appId}ClientRegistration`);
       expect(clientRegistry).not.toContain(`@citadel/app-${appId}/server`);
