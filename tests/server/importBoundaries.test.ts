@@ -122,6 +122,7 @@ const publicRuntimeExports = {
   '@citadel/app-chat/client': ['chatClientApp'],
   '@citadel/app-chat/server': [
     'chatServerBundle',
+    'chatServerRegistration',
     'createChatServerAppFromServices',
     'createChatRepository',
     'createSqliteMessageStore',
@@ -132,13 +133,18 @@ const publicRuntimeExports = {
   '@citadel/app-chess/client': ['chessClientApp'],
   '@citadel/app-chess/server': [
     'chessServerBundle',
+    'chessServerRegistration',
     'createChessRepository',
     'createChessServerAppFromServices',
     'resolveChessRepository'
   ],
   '@citadel/app-snake': ['snakeManifest'],
   '@citadel/app-snake/client': ['snakeClientApp'],
-  '@citadel/app-snake/server': ['createSnakeServerAppFromServices', 'snakeServerBundle']
+  '@citadel/app-snake/server': [
+    'createSnakeServerAppFromServices',
+    'snakeServerBundle',
+    'snakeServerRegistration'
+  ]
 } as const satisfies Record<string, readonly string[]>;
 
 const forbiddenPackageExportPattern =
@@ -219,6 +225,7 @@ describe('app package import boundaries', () => {
     expect(registry).toContain("from '@citadel/platform/server-app'");
     for (const appId of appIds) {
       expect(registry).toContain(`from '@citadel/app-${appId}/server'`);
+      expect(registry).toContain(`${appId}ServerRegistration`);
       expect(registry).not.toContain(`@citadel/app-${appId}/client`);
       expect(registry).not.toContain(`@citadel/apps/${appId}`);
     }
@@ -226,6 +233,10 @@ describe('app package import boundaries', () => {
       /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
     );
     expect(registry).not.toMatch(/ChatServerAppServices|ChessServerAppServices/);
+    expect(registry).not.toMatch(/chatServerBundle|chessServerBundle|snakeServerBundle/);
+    expect(registry).not.toMatch(
+      /createChatServerAppFromServices|createChessServerAppFromServices|createSnakeServerAppFromServices/
+    );
     expect(registry).not.toMatch(/resolveChatRepository|resolveChessRepository|resolveBundledRepositories/);
   });
 

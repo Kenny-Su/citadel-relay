@@ -1,4 +1,4 @@
-import type { ServerAppBundle, ServerAppServices } from '@citadel/platform/server-app';
+import type { ServerAppBundle, ServerAppRegistration, ServerAppServices } from '@citadel/platform/server-app';
 import { chessManifest } from './manifest.js';
 import { createChessRepository, type ChessRepository } from './repository.js';
 import { createChessApp } from './server.js';
@@ -30,3 +30,9 @@ export const chessServerBundle = {
     });
   }
 } satisfies ServerAppBundle<ChessServerAppServices>;
+
+export const chessServerRegistration = {
+  appId: chessServerBundle.appId,
+  bundle: chessServerBundle,
+  createServerApp: createChessServerAppFromServices
+} satisfies ServerAppRegistration<ChessServerAppServices>;

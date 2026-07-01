@@ -1,24 +1,22 @@
 import type { AppId, AppManifest } from '@citadel/platform/app';
 import { isAppId } from '@citadel/platform/app';
-import type { ServerAppModule } from '@citadel/platform/server-app';
+import type { ServerAppModule, ServerAppRegistration } from '@citadel/platform/server-app';
 import {
   bundledAppIds,
   bundledAppManifests,
   orderBundledAppEntries
 } from './catalog.js';
 import {
-  chatServerBundle,
-  createChatServerAppFromServices,
+  chatServerRegistration,
   type ChatRateLimitOptions,
   type ChatRepository,
   type MessageStore
 } from '@citadel/app-chat/server';
 import {
-  chessServerBundle,
-  createChessServerAppFromServices,
+  chessServerRegistration,
   type ChessRepository
 } from '@citadel/app-chess/server';
-import { createSnakeServerAppFromServices, snakeServerBundle } from '@citadel/app-snake/server';
+import { snakeServerRegistration } from '@citadel/app-snake/server';
 import type { ServerAppServices } from './serverServices.js';
 
 export type { ChatRateLimitOptions } from '@citadel/app-chat/server';
@@ -34,34 +32,13 @@ export type BundledServerAppServices = ServerAppServices & {
 
 export { bundledAppManifests } from './catalog.js';
 
-type BundledServerAppBundle =
-  | typeof chatServerBundle
-  | typeof chessServerBundle
-  | typeof snakeServerBundle;
-
-type BundledServerAppDefinition = {
-  appId: AppId;
-  bundle: BundledServerAppBundle;
-  createServerApp(services: BundledServerAppServices): ServerAppModule;
-};
+type BundledServerAppRegistration = ServerAppRegistration<BundledServerAppServices>;
 
 const bundledServerAppDefinitions = orderBundledAppEntries({
-  chat: {
-    appId: chatServerBundle.appId,
-    bundle: chatServerBundle,
-    createServerApp: createChatServerAppFromServices
-  },
-  chess: {
-    appId: chessServerBundle.appId,
-    bundle: chessServerBundle,
-    createServerApp: createChessServerAppFromServices
-  },
-  snake: {
-    appId: snakeServerBundle.appId,
-    bundle: snakeServerBundle,
-    createServerApp: createSnakeServerAppFromServices
-  }
-}) satisfies BundledServerAppDefinition[];
+  chat: chatServerRegistration,
+  chess: chessServerRegistration,
+  snake: snakeServerRegistration
+}) satisfies BundledServerAppRegistration[];
 
 export const bundledServerAppBundles = bundledServerAppDefinitions.map((definition) => definition.bundle);
 

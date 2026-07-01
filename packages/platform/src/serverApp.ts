@@ -3,7 +3,8 @@ import type { CitadelDatabase } from './persistence.js';
 export type {
   ServerAppBundle,
   ServerAppContext,
-  ServerAppModule
+  ServerAppModule,
+  ServerAppRegistration
 } from './serverAppContract.js';
 
 export type ServerAppServices = {

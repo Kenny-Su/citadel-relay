@@ -15,11 +15,13 @@ import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/per
 import type { ServerAppContext } from '@citadel/platform/server-app';
 import {
   createChatServerAppFromServices,
+  chatServerRegistration as publicChatServerRegistration,
   resolveChatRepository,
   type ChatRepository
 } from '@citadel/app-chat/server';
 import {
   createChessServerAppFromServices,
+  chessServerRegistration as publicChessServerRegistration,
   resolveChessRepository,
   type ChessRepository
 } from '@citadel/app-chess/server';
@@ -32,9 +34,7 @@ import {
 import {
   snakeManifest as publicSnakeManifest
 } from '@citadel/app-snake';
-import { chatServerBundle as publicChatServerBundle } from '@citadel/app-chat/server';
-import { chessServerBundle as publicChessServerBundle } from '@citadel/app-chess/server';
-import { snakeServerBundle as publicSnakeServerBundle } from '@citadel/app-snake/server';
+import { snakeServerRegistration as publicSnakeServerRegistration } from '@citadel/app-snake/server';
 
 describe('bundled server app registry', () => {
   let tempDir: string;
@@ -88,13 +88,24 @@ describe('bundled server app registry', () => {
     expect(bundledServerAppBundles.map((bundle) => bundle.appId)).toEqual(bundledAppIds);
   });
 
-  it('exposes app manifests and server bundles from environment entrypoints', () => {
+  it('exposes app manifests and server registrations from environment entrypoints', () => {
     expect([publicChatManifest, publicChessManifest, publicSnakeManifest].map((manifest) => manifest.appId)).toEqual([
       'chat',
       'chess',
       'snake'
     ]);
-    expect([publicChatServerBundle, publicChessServerBundle, publicSnakeServerBundle].map((bundle) => bundle.appId)).toEqual([
+    const registrations = [
+      publicChatServerRegistration,
+      publicChessServerRegistration,
+      publicSnakeServerRegistration
+    ];
+
+    expect(registrations.map((registration) => registration.appId)).toEqual([
+      'chat',
+      'chess',
+      'snake'
+    ]);
+    expect(registrations.map((registration) => registration.bundle.appId)).toEqual([
       'chat',
       'chess',
       'snake'

@@ -1,4 +1,4 @@
-import type { ServerAppBundle, ServerAppServices } from '@citadel/platform/server-app';
+import type { ServerAppBundle, ServerAppRegistration, ServerAppServices } from '@citadel/platform/server-app';
 import { chatManifest } from './manifest.js';
 import { createChatRepository, type ChatRepository, type MessageStore } from './messageStore.js';
 import { createChatApp } from './server.js';
@@ -38,3 +38,9 @@ export const chatServerBundle = {
     });
   }
 } satisfies ServerAppBundle<ChatServerAppServices>;
+
+export const chatServerRegistration = {
+  appId: chatServerBundle.appId,
+  bundle: chatServerBundle,
+  createServerApp: createChatServerAppFromServices
+} satisfies ServerAppRegistration<ChatServerAppServices>;

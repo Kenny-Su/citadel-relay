@@ -26,3 +26,9 @@ export type ServerAppBundle<TServices> = {
   appId: AppId;
   createServerApp(services: TServices): ServerAppModule;
 };
+
+export type ServerAppRegistration<TServices> = {
+  appId: AppId;
+  bundle: ServerAppBundle<TServices>;
+  createServerApp(services: TServices): ServerAppModule;
+};

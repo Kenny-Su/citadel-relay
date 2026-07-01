@@ -8,15 +8,15 @@ Each bundled app exposes three environment-specific surfaces:
 
 - `packages/apps/<app>/src/index.ts`: neutral metadata and shared types only.
 - `packages/apps/<app>/src/client.tsx`: browser `ClientAppModule` and view wiring.
-- `packages/apps/<app>/src/serverEntry.ts`: server bundle, repository resolver, and server-only exports.
+- `packages/apps/<app>/src/serverEntry.ts`: server registration, bundle, repository resolver, and server-only exports.
 
-Bundled app order and neutral manifests are owned by `src/bundledApps/definitions.ts`. Client and server registries derive their ordered app lists from that neutral bundled definition list, while keeping client modules and server bundle adapters in environment-specific package surfaces.
+Bundled app order and neutral manifests are owned by `src/bundledApps/definitions.ts`. Client and server registries derive their ordered app lists from that neutral bundled definition list, while keeping client modules and server registrations in environment-specific package surfaces.
 
 Platform contracts are split by environment inside `packages/platform/src`:
 
 - `appContract.ts`: neutral app metadata such as `AppManifest`.
 - `clientAppContract.ts`: browser view contracts such as `AppViewProps` and `ClientAppModule`.
-- `serverAppContract.ts`: server runtime contracts such as `ServerAppContext`, `ServerAppModule`, and `ServerAppBundle`.
+- `serverAppContract.ts`: server runtime contracts such as `ServerAppContext`, `ServerAppModule`, `ServerAppBundle`, and `ServerAppRegistration`.
 
 Bundled apps import platform APIs through small app-facing facades. These are the package-facing platform exports:
 
@@ -44,7 +44,7 @@ Workspace packages exist under `packages/` as the scaffold for the source split.
 Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
 All bundled apps are source-owning workspace packages: their implementations live under `packages/apps/<app>/src`.
 
-Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned bundled adapter.
+Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned server registration.
 
 Package exports map each public surface to built JavaScript and declarations, for example:
 
@@ -70,7 +70,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Platform core imports only platform contracts and generic server modules. It must not import concrete app internals.
 - The neutral bundled definition list imports app manifests only.
 - The client registry imports app client entrypoints plus neutral shared types.
-- The server registry imports app server entrypoints and calls app-owned server service adapters.
+- The server registry imports app server registrations and calls their app-owned server service adapters through that registration contract.
 - Neutral app indexes do not export client modules, server bundles, repositories, repository resolvers, or implementation factories.
 - App code imports platform contracts, shared platform helpers, and persistence APIs through `@citadel/platform/*` aliases rather than relative platform, shared, or persistence paths.
 - Registries import bundled app public surfaces through `@citadel/app-*` package aliases rather than relative app entrypoint paths.

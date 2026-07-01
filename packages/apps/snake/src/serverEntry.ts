@@ -1,4 +1,4 @@
-import type { ServerAppBundle, ServerAppServices } from '@citadel/platform/server-app';
+import type { ServerAppBundle, ServerAppRegistration, ServerAppServices } from '@citadel/platform/server-app';
 import { snakeManifest } from './manifest.js';
 import { createSnakeApp } from './server.js';
 
@@ -12,3 +12,9 @@ export const snakeServerBundle = {
 export function createSnakeServerAppFromServices(services: ServerAppServices) {
   return snakeServerBundle.createServerApp(services);
 }
+
+export const snakeServerRegistration = {
+  appId: snakeServerBundle.appId,
+  bundle: snakeServerBundle,
+  createServerApp: createSnakeServerAppFromServices
+} satisfies ServerAppRegistration<ServerAppServices>;
