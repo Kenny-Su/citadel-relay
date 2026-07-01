@@ -10,7 +10,7 @@ Each bundled app exposes three environment-specific surfaces:
 - `packages/apps/<app>/src/client.tsx`: browser client registration, `ClientAppModule`, and view wiring.
 - `packages/apps/<app>/src/serverEntry.ts`: server registration, bundle, repository resolver, and server-only exports.
 
-Bundled app order is declared as package names in `bundled-apps.json`. `src/bundledApps/config.ts` validates that data, a static bundled resolver maps those package names to app-owned neutral package descriptors, and `src/bundledApps/definitions.ts` derives ordered manifests from that resolved descriptor list. Client and server registries derive their ordered app lists from the descriptor list, while keeping client and server registrations in environment-specific package surfaces.
+Bundled app order is declared as package names in `bundled-apps.json`. `src/bundledApps/config.ts` validates that data, a generated resolver map imports the selected app package descriptors, and `src/bundledApps/definitions.ts` derives ordered manifests from that resolved descriptor list. Client and server registries derive their ordered app lists from the descriptor list, while keeping client and server registrations in environment-specific package surfaces.
 
 Platform contracts are split by environment inside `packages/platform/src`:
 
@@ -72,7 +72,8 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Platform core imports only platform contracts and generic server modules. It must not import concrete app internals.
 - `bundled-apps.json` declares app package names only.
 - The neutral bundled app config validates the JSON selection data.
-- The bundled app resolver is the only neutral host module that statically maps configured package names to app package descriptors.
+- `src/bundledApps/generatedResolver.ts` is generated from `bundled-apps.json` and is the only neutral host module that statically imports configured app package descriptors.
+- The handwritten bundled app resolver owns validation and imports the generated descriptor map.
 - The client registry imports app client registrations plus neutral shared types.
 - The server registry imports app server registrations and calls their app-owned server service adapters through that registration contract.
 - Neutral app indexes do not import client modules, server bundles, repositories, repository resolvers, or implementation factories.
