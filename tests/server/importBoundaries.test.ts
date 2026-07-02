@@ -77,6 +77,9 @@ const deletedCompatibilityPaths = [
   'src/apps/serverRegistry.ts',
   'src/apps/serverServices.ts',
   'src/persistence/sqlite.ts',
+  'src/server/chatServer.ts',
+  'src/server/legacyAppRepositories.ts',
+  'src/server/legacyChatServer.ts',
   'src/server/messageStore.ts',
   'src/server/validation.ts',
   'src/shared/chat.ts',
@@ -379,8 +382,6 @@ describe('app package import boundaries', () => {
       'src/bundledApps/catalog.ts',
       'src/client/appRegistry.tsx',
       'src/server/citadelServer.ts',
-      'src/server/chatServer.ts',
-      'src/server/legacyChatServer.ts',
       'src/server/index.ts',
       'src/bundledApps/serverServices.ts'
     ];
@@ -470,50 +471,21 @@ describe('app package import boundaries', () => {
     expect(registry).not.toMatch(/resolveChatRepository|resolveChessRepository|resolveBundledRepositories/);
   });
 
-  it('keeps legacy app repository coupling isolated from chat server wiring', () => {
+  it('keeps host server wiring generic and free of legacy app repository coupling', () => {
     const citadelServer = source('src/server/citadelServer.ts');
-    const chatServer = source('src/server/chatServer.ts');
-    const legacyChatServer = source('src/server/legacyChatServer.ts');
     const serverIndex = source('src/server/index.ts');
-    const legacyRepositories = source('src/server/legacyAppRepositories.ts');
     const socketTest = source('tests/server/socket.test.ts');
-    const chatServerTest = source('tests/server/chatServer.test.ts');
-    const legacyChatServerTest = source('tests/server/legacyChatServer.test.ts');
 
     expect(serverIndex).toContain("from './citadelServer.js'");
     expect(serverIndex).not.toContain('@citadel/platform/server');
     expect(serverIndex).not.toContain('../bundledApps/serverRegistry');
-    expect(serverIndex).not.toContain('CHAT_DB_PATH');
     expect(citadelServer).toContain("from '../bundledApps/serverRegistry.js'");
     expect(citadelServer).not.toContain('./legacyAppRepositories');
-    expect(citadelServer).not.toMatch(/chatRepository|chessRepository|messageStore|messageRateLimit|CHAT_DB_PATH/);
-    expect(chatServer.trim()).toBe("export { createChatServer, type ChatServerOptions } from './legacyChatServer.js';");
-    expect(legacyChatServer).toContain("from './citadelServer.js'");
-    expect(legacyChatServer).toContain("from './legacyAppRepositories.js'");
-    expect(legacyChatServer).not.toContain('CHAT_DB_PATH');
-    expect(legacyChatServer).toContain('CITADEL_DB_PATH');
-    expect(chatServer).not.toContain('@citadel/platform/server');
-    expect(chatServer).not.toContain('../bundledApps/serverRegistry');
-    expect(chatServer).not.toContain('@citadel/app-chat/server');
-    expect(chatServer).not.toContain('@citadel/app-chess/server');
-    expect(chatServer).not.toMatch(/ChatRepository|ChessRepository|MessageStore/);
-    expect(chatServer).not.toMatch(/resolveChatRepository|resolveChessRepository/);
-    expect(legacyChatServer).not.toContain('@citadel/platform/server');
-    expect(legacyChatServer).not.toContain('../bundledApps/serverRegistry');
-    expect(legacyChatServer).not.toContain('@citadel/app-chat/server');
-    expect(legacyChatServer).not.toContain('@citadel/app-chess/server');
-    expect(legacyChatServer).not.toMatch(/ChatRepository|ChessRepository|MessageStore/);
-    expect(legacyChatServer).not.toMatch(/resolveChatRepository|resolveChessRepository/);
-    expect(legacyRepositories).toContain('@citadel/app-chat/server');
-    expect(legacyRepositories).toContain('@citadel/app-chess/server');
-    expect(legacyRepositories).toMatch(/resolveChatRepository|resolveChessRepository/);
+    expect(`${serverIndex}\n${citadelServer}`).not.toMatch(
+      /createChatServer|legacyAppRepositories|legacyChatServer|chatRepository|chessRepository|messageStore|messageRateLimit|CHAT_DB_PATH/
+    );
     expect(socketTest).toContain('../../src/server/citadelServer.js');
     expect(socketTest).not.toContain('../../src/server/chatServer.js');
-    expect(chatServerTest).toContain('../../src/server/chatServer.js');
-    expect(chatServerTest).toContain('../../src/server/legacyChatServer.js');
-    expect(chatServerTest).not.toMatch(/createChatRepository|createChessRepository|openCitadelDatabase/);
-    expect(legacyChatServerTest).toContain('../../src/server/legacyChatServer.js');
-    expect(legacyChatServerTest).not.toContain('../../src/server/chatServer.js');
   });
 
   it('keeps app client code away from server-only surfaces', () => {

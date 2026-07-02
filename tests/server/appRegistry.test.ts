@@ -48,10 +48,6 @@ import {
   snakeManifest as publicSnakeManifest
 } from '@citadel/app-snake';
 import { snakeServerRegistration as publicSnakeServerRegistration } from '@citadel/app-snake/server';
-import {
-  createLegacyAppServiceBag,
-  getLegacyServiceNames
-} from '../../src/server/legacyAppRepositories.js';
 
 type CitadelPackageMetadata = {
   appId: string;
@@ -321,61 +317,6 @@ describe('bundled server app registry', () => {
     expect(chatRepository.listRecentMessages).toHaveBeenCalledWith('general', 100);
     expect(chessRepository.getGame).toHaveBeenCalledWith('general');
     expect(chessRepository.saveGame).toHaveBeenCalled();
-  });
-
-  it('creates legacy app service bags from selected app capabilities', () => {
-    const chatRepository = {
-      listRecentMessages: vi.fn(() => []),
-      saveMessage: vi.fn(),
-      countMessages: vi.fn(() => 0),
-      close: vi.fn()
-    } satisfies ChatRepository;
-    const chessRepository = {
-      getGame: vi.fn(() => null),
-      saveGame: vi.fn(),
-      appendMove: vi.fn(),
-      listMoves: vi.fn(() => []),
-      close: vi.fn()
-    } satisfies ChessRepository;
-    const repositories = {
-      chatRepository,
-      chessRepository,
-      messageStore: chatRepository
-    };
-    const messageRateLimit = {
-      maxMessages: 5,
-      windowMs: 80
-    };
-
-    expect(getLegacyServiceNames()).toEqual([
-      'chatRepository',
-      'messageStore',
-      'messageRateLimit',
-      'chessRepository'
-    ]);
-    expect(getLegacyServiceNames([publicSnakeAppPackage])).toEqual([]);
-    expect(createLegacyAppServiceBag(repositories, { messageRateLimit }, ['chat'])).toEqual({
-      chatRepository,
-      messageStore: chatRepository,
-      messageRateLimit
-    });
-    expect(createLegacyAppServiceBag(repositories, { messageRateLimit }, ['chess'])).toEqual({
-      chessRepository
-    });
-    expect(createLegacyAppServiceBag(repositories, { messageRateLimit }, ['snake'])).toEqual({});
-    expect(createLegacyAppServiceBag(repositories, { messageRateLimit }, ['snake', 'chat'])).toEqual({
-      chatRepository,
-      messageStore: chatRepository,
-      messageRateLimit
-    });
-    expect(() => getLegacyServiceNames([
-      {
-        appId: 'demo',
-        capabilities: {
-          legacyServices: ['unknownService']
-        }
-      }
-    ])).toThrow('Unsupported legacy app service capability "unknownService" declared by app "demo"');
   });
 
 });
