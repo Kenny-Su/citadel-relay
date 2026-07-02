@@ -1,4 +1,4 @@
-export type { AppManifest, AppPackageCapabilities, AppPackageDescriptor } from './appContract.js';
+export type { AppManifest, AppPackageDescriptor } from './appContract.js';
 export {
   DEFAULT_SPACE_ID,
   APP_ID_MAX_LENGTH,

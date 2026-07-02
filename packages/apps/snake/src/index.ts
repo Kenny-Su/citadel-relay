@@ -16,9 +16,6 @@ export const snakeAppPackage = {
   appId: snakeManifest.appId,
   manifest: snakeManifest,
   packageName: '@citadel/app-snake',
-  capabilities: {
-    legacyServices: []
-  },
   client: {
     subpath: './client',
     registrationExport: 'snakeClientRegistration'

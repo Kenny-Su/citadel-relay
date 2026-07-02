@@ -30,13 +30,6 @@
     "defaultSpaceId": "general",
     "persistence": "sqlite",
     "version": "0.1.0",
-    "capabilities": {
-      "legacyServices": [
-        "chatRepository",
-        "messageStore",
-        "messageRateLimit"
-      ]
-    },
     "client": {
       "subpath": "./client",
       "registrationExport": "chatClientRegistration"

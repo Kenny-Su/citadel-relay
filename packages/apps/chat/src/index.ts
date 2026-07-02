@@ -19,13 +19,6 @@ export const chatAppPackage = {
   appId: chatManifest.appId,
   manifest: chatManifest,
   packageName: '@citadel/app-chat',
-  capabilities: {
-    legacyServices: [
-      'chatRepository',
-      'messageStore',
-      'messageRateLimit'
-    ]
-  },
   client: {
     subpath: './client',
     registrationExport: 'chatClientRegistration'
