@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as Client, type Socket } from 'socket.io-client';
-import { createChatServer } from '../../src/server/chatServer.js';
 import { createChatRepository } from '@citadel/app-chat/server';
 import { createChessRepository } from '@citadel/app-chess/server';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { createCitadelServer } from '../../src/server/citadelServer.js';
 import type { ChatMessage, TypingUpdatePayload } from '@citadel/app-chat';
 import type { ChessState } from '@citadel/app-chess';
 import type { SnakeState } from '@citadel/app-snake';
@@ -51,40 +51,61 @@ type HealthResponse = PlatformMetadataResponse & {
 };
 
 describe('platform socket', () => {
-  let server: ReturnType<typeof createChatServer>;
+  let server: ReturnType<typeof createCitadelServer>;
   let tempDir: string;
   let dbPath: string;
   let database: CitadelDatabase;
+  let chatRepository: ReturnType<typeof createChatRepository>;
+  let chessRepository: ReturnType<typeof createChessRepository>;
   let url: string;
   const clients: Socket[] = [];
 
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-platform-socket-'));
     dbPath = join(tempDir, 'chat.sqlite');
+    await startServer();
+  });
+
+  afterEach(async () => {
+    await stopServer();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  async function startServer(options: { enabledAppIds?: AppId[] } = {}) {
     database = openCitadelDatabase(dbPath);
-    server = createChatServer({
+    chatRepository = createChatRepository(database.database);
+    chessRepository = createChessRepository(database.database);
+    server = createCitadelServer({
       clientOrigin: '*',
       database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
+      enabledAppIds: options.enabledAppIds,
+      appServices: {
+        chatRepository,
+        chessRepository,
+        messageStore: chatRepository,
+        messageRateLimit: {
+          maxMessages: 5,
+          windowMs: 80
+        }
       }
     });
     await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
     const address = server.httpServer.address() as AddressInfo;
     url = `http://127.0.0.1:${address.port}`;
-  });
+  }
 
-  afterEach(async () => {
+  async function stopServer() {
     clients.forEach((client) => client.close());
     clients.length = 0;
     await new Promise<void>((resolve) => server.io.close(() => resolve()));
     await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
     database.close();
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  }
+
+  async function restartServer(options: { enabledAppIds?: AppId[] } = {}) {
+    await stopServer();
+    await startServer(options);
+  }
 
   async function connectClient() {
     const client = Client(url, { autoConnect: false, transports: ['websocket'] });
@@ -102,27 +123,7 @@ describe('platform socket', () => {
   }
 
   it('exposes enabled apps through health and config', async () => {
-    clients.forEach((client) => client.close());
-    clients.length = 0;
-    await new Promise<void>((resolve) => server.io.close(() => resolve()));
-    await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
-    database.close();
-
-    database = openCitadelDatabase(dbPath);
-    server = createChatServer({
-      clientOrigin: '*',
-      database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      enabledAppIds: ['chat', 'snake'],
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
-      }
-    });
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
-    const address = server.httpServer.address() as AddressInfo;
-    url = `http://127.0.0.1:${address.port}`;
+    await restartServer({ enabledAppIds: ['chat', 'snake'] });
 
     const expectedAppManifests = [
       {
@@ -157,27 +158,7 @@ describe('platform socket', () => {
   });
 
   it('rejects joins for disabled apps', async () => {
-    clients.forEach((client) => client.close());
-    clients.length = 0;
-    await new Promise<void>((resolve) => server.io.close(() => resolve()));
-    await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
-    database.close();
-
-    database = openCitadelDatabase(dbPath);
-    server = createChatServer({
-      clientOrigin: '*',
-      database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      enabledAppIds: ['chat'],
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
-      }
-    });
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
-    const address = server.httpServer.address() as AddressInfo;
-    url = `http://127.0.0.1:${address.port}`;
+    await restartServer({ enabledAppIds: ['chat'] });
 
     const ada = await connectClient();
     const error = once<PlatformErrorPayload>(ada, 'error:notice');
@@ -237,7 +218,7 @@ describe('platform socket', () => {
       participantName: 'Ada',
       body: 'hello platform'
     });
-    expect(server.messageStore.listRecentMessages('design')).toHaveLength(1);
+    expect(chatRepository.listRecentMessages('design')).toHaveLength(1);
   });
 
   it('loads persisted chat messages after a server restart', async () => {
@@ -252,26 +233,7 @@ describe('platform socket', () => {
     });
     expect(await sentMessage).toMatchObject({ body: 'still here after restart' });
 
-    clients.forEach((client) => client.close());
-    clients.length = 0;
-    await new Promise<void>((resolve) => server.io.close(() => resolve()));
-    await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
-    database.close();
-
-    database = openCitadelDatabase(dbPath);
-    server = createChatServer({
-      clientOrigin: '*',
-      database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
-      }
-    });
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
-    const address = server.httpServer.address() as AddressInfo;
-    url = `http://127.0.0.1:${address.port}`;
+    await restartServer();
 
     const grace = await connectClient();
     const state = await joinSpace(grace, 'Grace', 'chat', 'design');
@@ -317,7 +279,7 @@ describe('platform socket', () => {
     expect(await errorForAda).toEqual({ message: 'Slow down before sending another message.' });
     await wait(40);
     expect(graceReceivedRejectedMessage).toBe(false);
-    expect(server.messageStore.listRecentMessages('general')).toHaveLength(5);
+    expect(chatRepository.listRecentMessages('general')).toHaveLength(5);
   });
 
   it('assigns chess players and validates moves authoritatively', async () => {
@@ -371,26 +333,7 @@ describe('platform socket', () => {
     });
     expect((await chessUpdate).fen).toContain(' b ');
 
-    clients.forEach((client) => client.close());
-    clients.length = 0;
-    await new Promise<void>((resolve) => server.io.close(() => resolve()));
-    await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
-    database.close();
-
-    database = openCitadelDatabase(dbPath);
-    server = createChatServer({
-      clientOrigin: '*',
-      database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
-      }
-    });
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
-    const address = server.httpServer.address() as AddressInfo;
-    url = `http://127.0.0.1:${address.port}`;
+    await restartServer();
 
     const reconnectedAda = await connectClient();
     const state = await joinSpace(reconnectedAda, 'Ada', 'chess', 'board', 'stable-ada');
@@ -502,26 +445,7 @@ describe('platform socket', () => {
     expect((initialState.appState as SnakeState).stage).toBe('waiting');
     expect((initialState.appState as SnakeState).snakes).toHaveLength(1);
 
-    clients.forEach((client) => client.close());
-    clients.length = 0;
-    await new Promise<void>((resolve) => server.io.close(() => resolve()));
-    await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
-    database.close();
-
-    database = openCitadelDatabase(dbPath);
-    server = createChatServer({
-      clientOrigin: '*',
-      database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
-      messageRateLimit: {
-        maxMessages: 5,
-        windowMs: 80
-      }
-    });
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
-    const address = server.httpServer.address() as AddressInfo;
-    url = `http://127.0.0.1:${address.port}`;
+    await restartServer();
 
     const reconnectedAda = await connectClient();
     const state = await joinSpace(reconnectedAda, 'Ada', 'snake', 'arena');
