@@ -386,6 +386,17 @@ describe('app package import boundaries', () => {
     expect(source(appImplementationPath('snake', 'shared.ts'))).toContain('SnakeStage');
   });
 
+  it('keeps concrete app view styles inside app packages', () => {
+    const hostStyles = source('src/client/styles.css');
+
+    expect(hostStyles).not.toMatch(
+      /\.message(?:\b|[.-])|\.message-list|\.message-meta|\.typing-indicator|\.composer(?:\b|[.-])|\.chess-|\.snake-|\.game-surface|\.game-status|\.game-meta/
+    );
+    expect(source(appImplementationPath('chat', 'ChatView.tsx'))).toContain('.message-list');
+    expect(source(appImplementationPath('chess', 'ChessView.tsx'))).toContain('.chess-board');
+    expect(source(appImplementationPath('snake', 'SnakeView.tsx'))).toContain('.snake-board');
+  });
+
   it('keeps neutral app indexes limited to manifests and shared types', () => {
     for (const appId of firstPartyAppIds) {
       const indexSource = source(appImplementationPath(appId, 'index.ts'));

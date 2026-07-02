@@ -18,6 +18,63 @@ const pieces: Record<string, string> = {
   Q: '♕',
   K: '♔'
 };
+const CHESS_VIEW_STYLES = `
+.game-surface {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px;
+}
+
+.game-status,
+.game-meta {
+  align-items: center;
+  color: #4e5c54;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.game-status strong {
+  color: #1f2a24;
+}
+
+.chess-board {
+  aspect-ratio: 1;
+  border: 1px solid #244238;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: min(68vh, 560px, 100%);
+}
+
+.chess-square {
+  align-items: center;
+  aspect-ratio: 1;
+  border-radius: 0;
+  color: #18211c;
+  display: flex;
+  font-size: clamp(1.5rem, 5vw, 3rem);
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+}
+
+.chess-square.light {
+  background: #f1ead8;
+}
+
+.chess-square.dark {
+  background: #7d9b8d;
+}
+
+.chess-square.selected {
+  box-shadow: inset 0 0 0 4px #d89b24;
+}
+`;
 
 function boardFromFen(fen: string) {
   const board = fen.split(' ')[0] ?? '';
@@ -96,37 +153,40 @@ export function ChessView({
         : 'Spectator';
 
   return (
-    <section className="game-surface" aria-label="Chess board">
-      <div className="game-status">
-        <strong>{state.status}</strong>
-        <span>You are {role}</span>
-      </div>
-      <div className="chess-board">
-        {ranks.map((rank, rankIndex) =>
-          files.map((file, fileIndex) => {
-            const square = `${file}${rank}`;
-            const piece = board[rankIndex]?.[fileIndex] ?? '';
+    <>
+      <style>{CHESS_VIEW_STYLES}</style>
+      <section className="game-surface" aria-label="Chess board">
+        <div className="game-status">
+          <strong>{state.status}</strong>
+          <span>You are {role}</span>
+        </div>
+        <div className="chess-board">
+          {ranks.map((rank, rankIndex) =>
+            files.map((file, fileIndex) => {
+              const square = `${file}${rank}`;
+              const piece = board[rankIndex]?.[fileIndex] ?? '';
 
-            return (
-              <button
-                className={`chess-square ${(rankIndex + fileIndex) % 2 === 0 ? 'light' : 'dark'} ${
-                  selected === square ? 'selected' : ''
-                }`}
-                key={square}
-                type="button"
-                onClick={() => handleSquareClick(square)}
-                aria-label={square}
-              >
-                {pieces[piece] ?? ''}
-              </button>
-            );
-          })
-        )}
-      </div>
-      <div className="game-meta">
-        <span>White: {participantName(state.players.white)}</span>
-        <span>Black: {participantName(state.players.black)}</span>
-      </div>
-    </section>
+              return (
+                <button
+                  className={`chess-square ${(rankIndex + fileIndex) % 2 === 0 ? 'light' : 'dark'} ${
+                    selected === square ? 'selected' : ''
+                  }`}
+                  key={square}
+                  type="button"
+                  onClick={() => handleSquareClick(square)}
+                  aria-label={square}
+                >
+                  {pieces[piece] ?? ''}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <div className="game-meta">
+          <span>White: {participantName(state.players.white)}</span>
+          <span>Black: {participantName(state.players.black)}</span>
+        </div>
+      </section>
+    </>
   );
 }

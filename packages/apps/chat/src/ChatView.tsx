@@ -3,6 +3,95 @@ import type { AppViewProps } from '@citadel/platform/client';
 import { MESSAGE_MAX_LENGTH, type ChatMessage, type ChatState, type TypingUpdatePayload } from './shared.js';
 
 const TYPING_IDLE_TIMEOUT_MS = 1200;
+const CHAT_VIEW_STYLES = `
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 24px;
+}
+
+.message {
+  align-self: flex-start;
+  background: #eef1ed;
+  border-radius: 8px;
+  max-width: min(680px, 82%);
+  padding: 12px 14px;
+}
+
+.message.mine {
+  align-self: flex-end;
+  background: #dff2ea;
+}
+
+.message-meta {
+  align-items: center;
+  color: #5b6861;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.message-meta strong {
+  color: #1f2a24;
+}
+
+.message-meta time {
+  font-size: 0.8rem;
+}
+
+.message p {
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.composer {
+  border-top: 1px solid #e4e8e5;
+  display: grid;
+  gap: 10px;
+  padding: 16px 24px;
+}
+
+.typing-indicator {
+  color: #66756c;
+  font-size: 0.9rem;
+  min-height: 20px;
+}
+
+.composer textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.composer-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.composer-actions span {
+  color: #65726b;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .message-list,
+  .composer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .message {
+    max-width: 92%;
+  }
+}
+`;
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -174,6 +263,7 @@ export function ChatView({
 
   return (
     <>
+      <style>{CHAT_VIEW_STYLES}</style>
       <div className="message-list" ref={listRef} onScroll={handleScroll}>
         {timeline.length === 0 ? (
           <div className="empty-state">No messages yet. Start the space.</div>
