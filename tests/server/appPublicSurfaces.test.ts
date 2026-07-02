@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bundledInstalledApps, bundledServerRegistrationByPackageName } from '../../src/bundledApps/generatedAppCatalog.js';
+import { bundledInstalledApps, bundledServerRegistrations } from '../../src/bundledApps/catalog.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 import type { ServerAppContext } from '@citadel/platform/server-app';
 import {
@@ -97,18 +97,12 @@ describe('app public package surfaces', () => {
         server: metadata.server
       }))
     );
-    const registrations = [
-      bundledServerRegistrationByPackageName['@citadel/app-chat'],
-      bundledServerRegistrationByPackageName['@citadel/app-chess'],
-      bundledServerRegistrationByPackageName['@citadel/app-snake']
-    ];
-
-    expect(registrations.map((registration) => registration.appId)).toEqual([
+    expect(bundledServerRegistrations.map((registration) => registration.appId)).toEqual([
       'chat',
       'chess',
       'snake'
     ]);
-    expect(registrations.map((registration) => registration.bundle.appId)).toEqual([
+    expect(bundledServerRegistrations.map((registration) => registration.bundle.appId)).toEqual([
       'chat',
       'chess',
       'snake'
@@ -128,7 +122,7 @@ describe('app public package surfaces', () => {
       'chess',
       'snake'
     ]);
-    expect(registrations).toEqual([
+    expect(bundledServerRegistrations).toEqual([
       publicChatServerRegistration,
       publicChessServerRegistration,
       publicSnakeServerRegistration

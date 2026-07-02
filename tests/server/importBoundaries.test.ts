@@ -920,7 +920,7 @@ describe('app package import boundaries', () => {
       expect(definitions).not.toContain(`from '${packageName}'`);
       expect(definitions).not.toContain(`${packageName}/client`);
       expect(definitions).not.toContain(`${packageName}/server`);
-      expect(generatedCatalog).toContain(`"${packageName}":`);
+      expect(generatedCatalog).toContain(`packageName: "${packageName}"`);
       expect(generatedCatalog).toContain(`appId: "${metadata.appId}"`);
       expect(generatedCatalog).toContain(`label: "${metadata.label}"`);
       expect(generatedCatalog).toContain(`persistence: "${metadata.persistence}"`);
@@ -955,9 +955,10 @@ describe('app package import boundaries', () => {
     expect(generatedCatalog).toContain('InstalledAppCatalogEntry');
     expect(generatedCatalog).not.toContain('export type BundledInstalledApp');
     expect(generatedCatalog).toContain('bundledInstalledApps');
-    expect(generatedCatalog).toContain('bundledAppDescriptorByPackageName');
-    expect(generatedCatalog).toContain('bundledClientRegistrationByPackageName');
-    expect(generatedCatalog).toContain('bundledServerRegistrationByPackageName');
+    expect(generatedCatalog).not.toContain('bundledAppDescriptorByPackageName');
+    expect(generatedCatalog).not.toContain('bundledClientRegistrationByPackageName');
+    expect(generatedCatalog).not.toContain('bundledServerRegistrationByPackageName');
+    expect(generatedCatalog).not.toContain('ByAppId');
     expect(definitions).toContain('bundledClientRegistrations');
     expect(definitions).toContain('bundledServerRegistrations');
     expect(serverRegistry).toContain('bundledServerRegistrations');

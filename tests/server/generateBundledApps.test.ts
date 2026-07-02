@@ -563,9 +563,9 @@ describe('bundled app generator package resolution', () => {
     expect(generatedCatalog).not.toContain('legacyServices');
     expect(generatedCatalog).not.toContain('capabilities');
     expect(generatedCatalog).toContain('bundledInstalledApps');
-    expect(generatedCatalog).toContain('bundledAppDescriptorByPackageName');
-    expect(generatedCatalog).toContain('bundledClientRegistrationByPackageName');
-    expect(generatedCatalog).toContain('bundledServerRegistrationByPackageName');
+    expect(generatedCatalog).not.toContain('bundledAppDescriptorByPackageName');
+    expect(generatedCatalog).not.toContain('bundledClientRegistrationByPackageName');
+    expect(generatedCatalog).not.toContain('bundledServerRegistrationByPackageName');
     expect(generatedCatalog).not.toContain('@citadel/app-chat');
     expect(generatedCatalog).not.toContain('@citadel/app-chess');
     expect(generatedCatalog).toContain(
@@ -729,7 +729,7 @@ describe('bundled app generator package resolution', () => {
     transpileGeneratedCatalog(hostDir);
     writeFileSync(probePath, [
       "import { createPlatformServer } from '@citadel/platform/server';",
-      "import { bundledInstalledApps, bundledAppDescriptorByAppId, bundledClientRegistrationByAppId, bundledServerRegistrationByAppId } from './src/bundledApps/generatedAppCatalog.mjs';",
+      "import { bundledInstalledApps } from './src/bundledApps/generatedAppCatalog.mjs';",
       '',
       'const [installedApp] = bundledInstalledApps;',
       'const serverModule = installedApp.serverRegistration.createServerApp({',
@@ -754,9 +754,9 @@ describe('bundled app generator package resolution', () => {
       '  installedCount: bundledInstalledApps.length,',
       '  descriptorAppId: installedApp.descriptor.appId,',
       '  descriptorPackageName: installedApp.descriptor.packageName,',
-      '  descriptorByAppId: bundledAppDescriptorByAppId.snake?.packageName,',
-      '  clientRegistrationAppId: bundledClientRegistrationByAppId.snake?.appId,',
-      '  serverRegistrationAppId: bundledServerRegistrationByAppId.snake?.appId,',
+      "  descriptorByAppId: bundledInstalledApps.find((app) => app.descriptor.appId === 'snake')?.descriptor.packageName,",
+      "  clientRegistrationAppId: bundledInstalledApps.find((app) => app.clientRegistration.appId === 'snake')?.clientRegistration.appId,",
+      "  serverRegistrationAppId: bundledInstalledApps.find((app) => app.serverRegistration.appId === 'snake')?.serverRegistration.appId,",
       '  serverModuleAppId: serverModule.appId,',
       '  platformAppIds: [...platform.apps.keys()],',
       '  initialState',
@@ -843,7 +843,7 @@ describe('bundled app generator package resolution', () => {
     await runGeneratorForPackages(hostDir, packedAppPackageNames);
     transpileGeneratedCatalog(hostDir);
     writeFileSync(probePath, [
-      "import { bundledInstalledApps, bundledAppDescriptorByPackageName, bundledClientRegistrationByPackageName, bundledServerRegistrationByPackageName } from './src/bundledApps/generatedAppCatalog.mjs';",
+      "import { bundledInstalledApps } from './src/bundledApps/generatedAppCatalog.mjs';",
       '',
       'console.log(JSON.stringify({',
       '  generatedSource: ' + JSON.stringify(readFileSync(generatedCatalogPath, 'utf8')) + ',',
@@ -855,9 +855,9 @@ describe('bundled app generator package resolution', () => {
       '    serverRegistrationAppId: app.serverRegistration.appId,',
       '    serverBundleAppId: app.serverRegistration.bundle.appId',
       '  })),',
-      '  descriptorPackages: Object.keys(bundledAppDescriptorByPackageName),',
-      '  clientPackages: Object.keys(bundledClientRegistrationByPackageName),',
-      '  serverPackages: Object.keys(bundledServerRegistrationByPackageName)',
+      '  descriptorPackages: bundledInstalledApps.map((app) => app.descriptor.packageName),',
+      '  clientPackages: bundledInstalledApps.map((app) => app.descriptor.packageName),',
+      '  serverPackages: bundledInstalledApps.map((app) => app.descriptor.packageName)',
       '}));'
     ].join('\n'));
 
