@@ -488,7 +488,8 @@ describe('app package import boundaries', () => {
     expect(chatServer.trim()).toBe("export { createChatServer, type ChatServerOptions } from './legacyChatServer.js';");
     expect(legacyChatServer).toContain("from './citadelServer.js'");
     expect(legacyChatServer).toContain("from './legacyAppRepositories.js'");
-    expect(legacyChatServer).toContain('CHAT_DB_PATH');
+    expect(legacyChatServer).not.toContain('CHAT_DB_PATH');
+    expect(legacyChatServer).toContain('CITADEL_DB_PATH');
     expect(chatServer).not.toContain('@citadel/platform/server');
     expect(chatServer).not.toContain('../bundledApps/serverRegistry');
     expect(chatServer).not.toContain('@citadel/app-chat/server');
