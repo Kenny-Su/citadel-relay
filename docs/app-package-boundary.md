@@ -1,6 +1,6 @@
 # App Package Boundary
 
-Citadel apps now own their implementation source in workspace package folders, while the platform shell still wires them as bundled apps. Their public surfaces should stay package-shaped so the remaining split work stays mechanical instead of architectural.
+Citadel apps own their implementation source in package folders, while the platform shell wires selected installed app packages through a generated catalog. Their public surfaces should stay package-shaped so the remaining split work stays mechanical instead of architectural.
 
 ## Public Surfaces
 
@@ -18,7 +18,7 @@ Hosts may select installed apps that the current repo does not build. In that sh
 
 To add an external app to a host, add the app package as a dependency, add its package name to `bundled-apps.json`, run install, and then run `npm run generate:bundled-apps`. If the package is not installed, catalog generation fails against the expected `node_modules/<package>/package.json` path instead of looking for source.
 
-Root lifecycle scripts build local workspace package artifacts and install local external app artifacts before generating the installed-app catalog, because generation validates package `exports` by importing the built public surfaces. External app dependencies are expected to arrive already built. For local external-app pilots, `npm run pack:local-package -- @citadel/app-snake` builds the platform and the Snake source directory, then writes an ignored npm tarball under `.citadel/app-packs` so the host can test the same packed dependency shape an external package would use. `npm run install:local-external-apps` builds each source path in `local-external-apps.json`, packs it, installs the packed artifact into `node_modules`, and gives that installed app artifact its own non-Citadel runtime dependency directories; the root `build:packages` lifecycle skips the installer Platform build because `build:platform` has already prepared shared Platform artifacts.
+Root lifecycle scripts build the Platform workspace artifact and install local external app artifacts before generating the installed-app catalog, because generation validates package `exports` by importing the built public surfaces. External app dependencies are expected to arrive already built. For local external-app pilots, `npm run pack:local-package -- @citadel/app-snake` builds the platform and the Snake source directory, then writes an ignored npm tarball under `.citadel/app-packs` so the host can test the same packed dependency shape an external package would use. `npm run install:local-external-apps` builds each source path in `local-external-apps.json`, packs it, installs the packed artifact into `node_modules`, and gives that installed app artifact its own non-Citadel runtime dependency directories; the root `build:packages` lifecycle skips the installer Platform build because `build:platform` has already prepared shared Platform artifacts.
 Root app-only libraries such as `chess.js` are local source-build bootstrap dev dependencies, not host runtime dependencies.
 
 Platform contracts are split by environment inside `packages/platform/src`:
@@ -43,7 +43,7 @@ The current repo resolves package-shaped imports through installed packages. Pla
 - `@citadel/platform/server` and `@citadel/platform/validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` with `./client` and `./server` surfaces.
 
-Local package source exists under `packages/` as the current local development shape for the source split. These packages keep thin TypeScript entrypoints as package-local build inputs:
+Local package source exists under `packages/` as the current local development shape for the source split. Package root TypeScript re-export shims are gone; public entrypoints are `dist` artifacts declared in package `exports`:
 
 - `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, `./persistence`, `./server`, and `./validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
@@ -54,7 +54,7 @@ Local package source exists under `packages/` as the current local development s
 - Local development watches the Platform workspace package alongside the server and Vite client. Apps in the local-external pilot path are prepared through packed artifacts before dev/test/build.
 
 Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
-The currently bundled first-party apps are still source-owning package folders in this repo, but they are no longer root npm workspaces. Their implementations live under `packages/apps/<app>/src`, and the host sees them through installed package artifacts in `node_modules`.
+The currently bundled first-party apps are still local package source folders in this repo, but they are no longer root npm workspaces. Their implementations live under `packages/apps/<app>/src`, and the host sees them through installed package artifacts in `node_modules`.
 
 Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned server registration. The host server factory is `createCitadelServer`; app-named host server factories such as the old `createChatServer` compatibility surface have been removed.
 
@@ -95,7 +95,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
 - Platform and app package manifests are publishable-shaped: they are not marked private, and npm pack includes only `dist` plus `package.json`.
 - Local packed app artifacts are written under ignored `.citadel/app-packs`; they are install inputs for pilots, not committed source.
-- The neutral bundled app config validates the JSON selection data for generation.
+- The catalog generator validates the JSON selection data before resolving installed app packages.
 - `src/bundledApps/generatedAppCatalog.ts` is generated from app package manifest metadata and is the only static host bridge to configured app descriptors and client/server registration imports.
 - Runtime bundled app definitions derive from the catalog facade over `generatedAppCatalog.ts`, not from `bundled-apps.json`.
 - Installed/generated catalog data is the host source of truth for known app ids; platform app-id validation is syntax-only.

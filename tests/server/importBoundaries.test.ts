@@ -911,6 +911,10 @@ describe('app package import boundaries', () => {
     expect(generator).toContain('node_modules');
     expect(exists('workspace-apps.json')).toBe(false);
     expect(exists('scripts/run-workspace-apps.mjs')).toBe(false);
+    expect(source('docs/app-package-boundary.md')).not.toContain('thin TypeScript entrypoints');
+    expect(source('docs/app-package-boundary.md')).not.toContain('neutral bundled app config');
+    expect(source('docs/app-package-boundary.md')).not.toContain('local workspace package artifacts');
+    expect(source('docs/app-package-boundary.md')).not.toContain('source-owning package folders');
 
     for (const packageName of bundledApps.packages) {
       const metadata = installedCitadelMetadata(packageName);
