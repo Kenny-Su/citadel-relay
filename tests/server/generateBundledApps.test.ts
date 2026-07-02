@@ -400,6 +400,11 @@ describe('bundled app generator package resolution', () => {
 
   it.each([
     {
+      appId: 'chat',
+      packageName: '@citadel/app-chat',
+      sourcePath: 'packages/apps/chat'
+    },
+    {
       appId: 'chess',
       packageName: '@citadel/app-chess',
       sourcePath: 'packages/apps/chess'

@@ -577,7 +577,11 @@ describe('app package import boundaries', () => {
     const workspacePackageNames = new Set(workspaceApps.packages);
 
     expect(rootPackage.dependencies['@citadel/platform']).toBe(platformPackage.version);
-    expect(localExternalApps.packages).toEqual(['@citadel/app-chess', '@citadel/app-snake']);
+    expect(localExternalApps.packages).toEqual([
+      '@citadel/app-chat',
+      '@citadel/app-chess',
+      '@citadel/app-snake'
+    ]);
     for (const packageName of bundledApps.packages) {
       const appPackage = installedPackageJson(packageName);
 
@@ -868,10 +872,12 @@ describe('app package import boundaries', () => {
       '@citadel/app-chess',
       '@citadel/app-snake'
     ]);
-    expect(workspaceApps.packages).toEqual([
-      '@citadel/app-chat'
+    expect(workspaceApps.packages).toEqual([]);
+    expect(localExternalApps.packages).toEqual([
+      '@citadel/app-chat',
+      '@citadel/app-chess',
+      '@citadel/app-snake'
     ]);
-    expect(localExternalApps.packages).toEqual(['@citadel/app-chess', '@citadel/app-snake']);
     expect(new Set(workspaceApps.packages).size).toBe(workspaceApps.packages.length);
     for (const packageName of workspaceApps.packages) {
       expect(bundledPackageNames.has(packageName)).toBe(true);

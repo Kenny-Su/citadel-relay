@@ -48,7 +48,7 @@ Workspace packages exist under `packages/` as the current local development shap
 - Each workspace package has a package-local no-emit TypeScript check. These checks prove package isolation without producing JavaScript or declarations.
 - Each workspace package also has a local package build that emits JavaScript and declarations into its ignored `dist/` directory. Package `exports` point at those built artifacts, and the host consumes packages through workspace package resolution rather than source aliases.
 - App package artifacts are built-package artifacts: npm pack allowlists `dist` plus `package.json`, so source files and TypeScript build configs are development inputs rather than external dependency contents.
-- Chess and Snake are the current local-external pilots: root build scripts install them from packed artifacts instead of workspace build/watch maintenance. Snake still carries the external-host proof: tests pack it through `scripts/pack-workspace-app.mjs`, install the tarball through npm into a temp host with no workspaces and an empty `workspace-apps.json`, generate a Snake-only installed-app catalog, and boot the host/server path from that packed dependency shape.
+- Chat, Chess, and Snake are local-external pilots: root build scripts install them from packed artifacts instead of workspace build/watch maintenance. Snake still carries the external-host proof: tests pack it through `scripts/pack-workspace-app.mjs`, install the tarball through npm into a temp host with no workspaces and an empty `workspace-apps.json`, generate a Snake-only installed-app catalog, and boot the host/server path from that packed dependency shape.
 - Local development prebuilds local workspace app artifacts once, then runs configured workspace app build watchers alongside the platform watcher, server, and Vite client so local `dist/` exports stay fresh during edits.
 
 Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
@@ -89,7 +89,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - `bundled-apps.json` declares installed app package names only.
 - Every package named in `bundled-apps.json` is a host package dependency.
 - `workspace-apps.json` declares local app packages that root build/watch scripts should build; installed external apps do not need to appear there.
-- `local-external-apps.json` declares local source packages that should be consumed as packed installed artifacts during the migration; currently those pilots are Chess and Snake.
+- `local-external-apps.json` declares local source packages that should be consumed as packed installed artifacts during the migration; currently all bundled apps are in that pilot path.
 - App `package.json` files declare Citadel metadata, including manifest data, capability metadata, and client/server registration subpaths and export names.
 - App capability metadata is declarative host compatibility data. `capabilities.legacyServices` names legacy service keys that the app can consume while old host adapters still exist; apps without legacy service needs declare an empty list.
 - App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
