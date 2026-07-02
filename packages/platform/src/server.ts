@@ -54,6 +54,7 @@ export function createPlatformServer(options: PlatformServerOptions) {
   const manifests = new Map<AppId, AppManifest>();
   const sessions = new Map<string, ParticipantSession>();
   const appState = new Map<string, unknown>();
+  const defaultAppId = options.apps[0]?.appId;
 
   for (const module of options.apps) {
     modules.set(module.appId, module);
@@ -236,8 +237,14 @@ export function createPlatformServer(options: PlatformServerOptions) {
   }
 
   io.on('connection', (socket) => {
-    socket.on('space:join', (payload: JoinSpacePayload = { appId: 'chat', name: '' }) => {
-      const appId = isAppId(payload.appId) ? payload.appId : 'chat';
+    socket.on('space:join', (payload: JoinSpacePayload = { appId: defaultAppId ?? '', name: '' }) => {
+      const appId = isAppId(payload.appId) ? payload.appId : defaultAppId;
+
+      if (!appId) {
+        socket.emit('error:notice', { message: 'Unknown app.' });
+        return;
+      }
+
       const module = modules.get(appId);
 
       if (!module) {

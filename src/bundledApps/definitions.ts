@@ -19,6 +19,6 @@ export function getBundledAppManifest(appId: AppId): AppManifest | undefined {
   return getBundledAppDefinition(appId)?.manifest;
 }
 
-export function orderBundledAppEntries<T extends Record<AppId, unknown>>(entriesById: T) {
-  return bundledAppDefinitions.map((definition) => entriesById[definition.appId]) as Array<T[AppId]>;
+export function orderBundledAppEntries<T>(entriesById: Record<string, T>) {
+  return bundledAppDefinitions.map((definition) => entriesById[definition.appId]) as T[];
 }

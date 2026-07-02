@@ -5,10 +5,12 @@ import { createChessApp } from './server.js';
 
 export type ChessServerAppServices = ServerAppServices & {
   chessRepository?: ChessRepository;
+  appServices?: Record<string, unknown>;
 };
 
 type ChessServerAppServiceInput = ServerAppServices & {
   chessRepository?: unknown;
+  appServices?: Record<string, unknown>;
 };
 
 export {
@@ -19,7 +21,9 @@ export {
 } from './repository.js';
 
 export function resolveChessRepository(services: ChessServerAppServices) {
-  return services.chessRepository ?? createChessRepository(services.database.database);
+  return services.chessRepository
+    ?? (services.appServices?.chessRepository as ChessRepository | undefined)
+    ?? createChessRepository(services.database.database);
 }
 
 export function createChessServerAppFromServices(services: ChessServerAppServiceInput) {

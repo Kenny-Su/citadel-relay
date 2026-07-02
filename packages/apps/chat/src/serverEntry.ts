@@ -12,12 +12,14 @@ export type ChatServerAppServices = ServerAppServices & {
   chatRepository?: ChatRepository;
   messageStore?: MessageStore;
   messageRateLimit?: ChatRateLimitOptions;
+  appServices?: Record<string, unknown>;
 };
 
 type ChatServerAppServiceInput = ServerAppServices & {
   chatRepository?: unknown;
   messageStore?: unknown;
   messageRateLimit?: unknown;
+  appServices?: Record<string, unknown>;
 };
 
 export {
@@ -28,7 +30,11 @@ export {
 } from './messageStore.js';
 
 export function resolveChatRepository(services: ChatServerAppServices) {
-  return services.chatRepository ?? services.messageStore ?? createChatRepository(services.database.database);
+  return services.chatRepository
+    ?? services.messageStore
+    ?? (services.appServices?.chatRepository as ChatRepository | undefined)
+    ?? (services.appServices?.messageStore as MessageStore | undefined)
+    ?? createChatRepository(services.database.database);
 }
 
 export function createChatServerAppFromServices(services: ChatServerAppServiceInput) {
@@ -41,6 +47,7 @@ export const chatServerBundle = {
     return createChatApp({
       repository: resolveChatRepository(services),
       messageRateLimit: services.messageRateLimit
+        ?? (services.appServices?.messageRateLimit as ChatRateLimitOptions | undefined)
     });
   }
 } satisfies ServerAppBundle<ChatServerAppServices>;

@@ -149,6 +149,7 @@ describe('platform app shell', () => {
   it('renders chat state and emits app events from the chat view', async () => {
     window.localStorage.setItem('citadel.displayName', 'Ada');
     window.localStorage.setItem('citadel.guestId', 'stable-ada');
+    window.history.replaceState(null, '', '/apps/chat/spaces/general');
     mockSocket.connected = true;
 
     render(<App />);
@@ -166,7 +167,7 @@ describe('platform app shell', () => {
       });
     });
 
-    fireEvent.change(screen.getByPlaceholderText('Write a message'), { target: { value: 'hello' } });
+    fireEvent.change(await screen.findByPlaceholderText('Write a message'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(mockSocket.emit).toHaveBeenCalledWith('app:event', {

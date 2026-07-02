@@ -181,6 +181,8 @@ const packagePaths = [
 
 const publicRuntimeExports = {
   '@citadel/platform/app': [
+    'APP_ID_MAX_LENGTH',
+    'APP_ID_PATTERN',
     'DEFAULT_SPACE_ID',
     'DISPLAY_NAME_MAX_LENGTH',
     'GUEST_ID_MAX_LENGTH',
@@ -256,6 +258,8 @@ describe('app package import boundaries', () => {
       expect(moduleSource).not.toContain('../apps/');
       expect(moduleSource).not.toContain('../../../src/');
     }
+    expect(source('packages/platform/src/shared.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
+    expect(source('packages/platform/src/server.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
     expect(source('packages/platform/src/appContract.ts')).not.toContain('react');
   });
 
@@ -302,6 +306,7 @@ describe('app package import boundaries', () => {
       expect(registry).not.toContain(`@citadel/apps/${appId}`);
     }
     expect(registry).not.toMatch(/chatClientApp|chessClientApp|snakeClientApp/);
+    expect(registry).not.toMatch(/'chat'|'chess'|'snake'/);
     expect(registry).not.toMatch(
       /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
     );
@@ -326,6 +331,7 @@ describe('app package import boundaries', () => {
       /\.\/(?:chat|chess|snake)\/(?:client|server|manifest|shared|repository|messageStore|validation|ChatView|ChessView|SnakeView)\.js/
     );
     expect(registry).not.toMatch(/ChatServerAppServices|ChessServerAppServices/);
+    expect(registry).not.toMatch(/chatRepository|chessRepository|messageStore|messageRateLimit/);
     expect(registry).not.toMatch(/chatServerBundle|chessServerBundle|snakeServerBundle/);
     expect(registry).not.toMatch(
       /createChatServerAppFromServices|createChessServerAppFromServices|createSnakeServerAppFromServices/
@@ -340,6 +346,7 @@ describe('app package import boundaries', () => {
     expect(chatServer).toContain("from './legacyAppRepositories.js'");
     expect(chatServer).not.toContain('@citadel/app-chat/server');
     expect(chatServer).not.toContain('@citadel/app-chess/server');
+    expect(chatServer).not.toMatch(/ChatRepository|ChessRepository|MessageStore/);
     expect(chatServer).not.toMatch(/resolveChatRepository|resolveChessRepository/);
     expect(legacyRepositories).toContain('@citadel/app-chat/server');
     expect(legacyRepositories).toContain('@citadel/app-chess/server');

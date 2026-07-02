@@ -15,6 +15,7 @@ import {
   clientApps,
   createClientAppsFromManifests,
   filterClientApps,
+  appById,
   isKnownAppEvent,
   type ClientAppModule
 } from './appRegistry';
@@ -40,14 +41,14 @@ function parseRoute(): RouteState {
   const [, first, second, third, fourth] = window.location.pathname.split('/');
 
   if (first === 'rooms') {
-    return { appId: 'chat', spaceId: normalizeSpaceId(second) };
+    return { appId: '', spaceId: normalizeSpaceId(second) };
   }
 
   if (first === 'apps' && third === 'spaces' && isAppId(second)) {
     return { appId: second, spaceId: normalizeSpaceId(fourth) };
   }
 
-  return { appId: 'chat', spaceId: DEFAULT_SPACE_ID };
+  return { appId: '', spaceId: DEFAULT_SPACE_ID };
 }
 
 function getSpacePath(appId: AppId, spaceId: string) {
@@ -70,7 +71,7 @@ function syncSpacePath(route: RouteState, mode: 'push' | 'replace' = 'push') {
 
 function normalizeRouteForApps(route: RouteState, apps: ClientAppModule<any>[]): RouteState {
   const fallbackApp = apps[0];
-  const fallbackAppId = fallbackApp?.appId ?? 'chat';
+  const fallbackAppId = fallbackApp?.appId ?? '';
 
   if (apps.some((app) => app.appId === route.appId)) {
     return route;
@@ -91,7 +92,7 @@ function getConfigAppIds(config: ClientConfig): AppId[] {
   const seen = new Set<AppId>();
 
   for (const appId of config.apps) {
-    if (!isAppId(appId) || seen.has(appId)) {
+    if (!isAppId(appId) || !appById.has(appId) || seen.has(appId)) {
       continue;
     }
 

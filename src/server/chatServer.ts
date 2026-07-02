@@ -3,23 +3,16 @@ import type { AppId } from '@citadel/platform/app';
 import { createBundledServerApps, filterAppManifests } from '../bundledApps/serverRegistry.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 import {
+  createLegacyAppServiceBag,
+  readLegacyAppRepositoryOptions,
   resolveLegacyAppRepositories,
-  type ChatRepository,
-  type ChessRepository,
-  type MessageStore
+  type LegacyAppRepositoryOptionFields
 } from './legacyAppRepositories.js';
 
 export type ChatServerOptions = Omit<PlatformServerOptions, 'apps'> & {
   database?: CitadelDatabase;
-  chatRepository?: ChatRepository;
-  chessRepository?: ChessRepository;
-  messageStore?: MessageStore;
-  messageRateLimit?: {
-    maxMessages: number;
-    windowMs: number;
-  };
   enabledAppIds?: AppId[];
-};
+} & LegacyAppRepositoryOptionFields;
 
 export function createChatServer(options: ChatServerOptions | string = {}) {
   const clientOrigin =
@@ -29,19 +22,15 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
       ? openCitadelDatabase(process.env.CHAT_DB_PATH ?? 'data/citadel.sqlite')
       : (options.database ??
         openCitadelDatabase(process.env.CHAT_DB_PATH ?? process.env.CITADEL_DB_PATH ?? 'data/citadel.sqlite'));
+  const legacyOptions = readLegacyAppRepositoryOptions(options);
   const services = {
     database,
-    chatRepository: typeof options === 'string' ? undefined : options.chatRepository,
-    chessRepository: typeof options === 'string' ? undefined : options.chessRepository,
-    messageStore: typeof options === 'string' ? undefined : options.messageStore,
-    messageRateLimit: typeof options === 'string' ? undefined : options.messageRateLimit,
     enabledAppIds: typeof options === 'string' ? undefined : options.enabledAppIds
   };
-  const {
-    chatRepository,
-    chessRepository,
-    messageStore
-  } = resolveLegacyAppRepositories(services);
+  const repositories = resolveLegacyAppRepositories({
+    database,
+    ...legacyOptions
+  });
   const appManifests = services.enabledAppIds ? filterAppManifests(services.enabledAppIds) : undefined;
 
   return {
@@ -51,13 +40,12 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
       appManifests,
       apps: createBundledServerApps({
         ...services,
-        chatRepository,
-        chessRepository
+        appServices: createLegacyAppServiceBag(repositories, legacyOptions)
       })
     }),
     database,
-    messageStore,
-    chatRepository,
-    chessRepository
+    messageStore: repositories.messageStore,
+    chatRepository: repositories.chatRepository,
+    chessRepository: repositories.chessRepository
   };
 }

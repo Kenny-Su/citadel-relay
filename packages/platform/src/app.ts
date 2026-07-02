@@ -1,6 +1,8 @@
 export type { AppManifest, AppPackageDescriptor } from './appContract.js';
 export {
   DEFAULT_SPACE_ID,
+  APP_ID_MAX_LENGTH,
+  APP_ID_PATTERN,
   DISPLAY_NAME_MAX_LENGTH,
   GUEST_ID_MAX_LENGTH,
   GUEST_ID_PATTERN,

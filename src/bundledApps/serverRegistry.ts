@@ -1,5 +1,4 @@
 import type { AppId, AppManifest } from '@citadel/platform/app';
-import { isAppId } from '@citadel/platform/app';
 import type { ServerAppModule, ServerAppRegistration } from '@citadel/platform/server-app';
 import {
   bundledAppDefinitions,
@@ -12,10 +11,7 @@ import type { ServerAppServices } from './serverServices.js';
 export type { ServerAppServices } from './serverServices.js';
 
 export type BundledServerAppServices = ServerAppServices & {
-  chatRepository?: unknown;
-  chessRepository?: unknown;
-  messageStore?: unknown;
-  messageRateLimit?: unknown;
+  appServices?: Record<string, unknown>;
   enabledAppIds?: AppId[];
 };
 
@@ -26,6 +22,7 @@ type BundledServerAppRegistration = ServerAppRegistration<BundledServerAppServic
 const bundledServerAppDefinitions = bundledAppDefinitions.map((definition) => (
   bundledServerRegistrationByPackageName[definition.packageName]
 )) satisfies BundledServerAppRegistration[];
+const bundledAppIdSet = new Set<AppId>(bundledAppIds);
 
 export const bundledServerAppBundles = bundledServerAppDefinitions.map((definition) => definition.bundle);
 
@@ -40,7 +37,7 @@ export function getEnabledAppIds(input?: string): AppId[] {
   for (const token of input.split(',')) {
     const appId = token.trim();
 
-    if (!isAppId(appId) || seen.has(appId)) {
+    if (!bundledAppIdSet.has(appId) || seen.has(appId)) {
       continue;
     }
 

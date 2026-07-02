@@ -1,5 +1,6 @@
 import {
   resolveChatRepository,
+  type ChatRateLimitOptions,
   type ChatRepository,
   type MessageStore
 } from '@citadel/app-chat/server';
@@ -14,6 +15,7 @@ export type LegacyAppRepositoryOptions = {
   chatRepository?: ChatRepository;
   chessRepository?: ChessRepository;
   messageStore?: MessageStore;
+  messageRateLimit?: ChatRateLimitOptions;
 };
 
 export type LegacyAppRepositories = {
@@ -21,6 +23,8 @@ export type LegacyAppRepositories = {
   chessRepository: ChessRepository;
   messageStore: MessageStore;
 };
+
+export type LegacyAppRepositoryOptionFields = Omit<LegacyAppRepositoryOptions, 'database'>;
 
 export type {
   ChatRepository,
@@ -36,5 +40,32 @@ export function resolveLegacyAppRepositories(options: LegacyAppRepositoryOptions
     chatRepository,
     chessRepository,
     messageStore: chatRepository
+  };
+}
+
+export function readLegacyAppRepositoryOptions(options: unknown): LegacyAppRepositoryOptionFields {
+  if (!options || typeof options === 'string') {
+    return {};
+  }
+
+  const legacyOptions = options as LegacyAppRepositoryOptionFields;
+
+  return {
+    chatRepository: legacyOptions.chatRepository,
+    chessRepository: legacyOptions.chessRepository,
+    messageStore: legacyOptions.messageStore,
+    messageRateLimit: legacyOptions.messageRateLimit
+  };
+}
+
+export function createLegacyAppServiceBag(
+  repositories: LegacyAppRepositories,
+  options: LegacyAppRepositoryOptionFields
+): Record<string, unknown> {
+  return {
+    chatRepository: repositories.chatRepository,
+    chessRepository: repositories.chessRepository,
+    messageStore: repositories.messageStore,
+    messageRateLimit: options.messageRateLimit
   };
 }

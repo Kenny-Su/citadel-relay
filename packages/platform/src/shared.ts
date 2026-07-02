@@ -4,8 +4,10 @@ export const SPACE_ID_MAX_LENGTH = 32;
 export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
 export const GUEST_ID_MAX_LENGTH = 80;
 export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+export const APP_ID_MAX_LENGTH = 64;
+export const APP_ID_PATTERN = /^[a-z0-9-]+$/;
 
-export type AppId = 'chat' | 'chess' | 'snake';
+export type AppId = string;
 
 export type Participant = {
   id: string;
@@ -61,7 +63,12 @@ export function normalizeSpaceId(input: unknown): string {
 }
 
 export function isAppId(value: unknown): value is AppId {
-  return value === 'chat' || value === 'chess' || value === 'snake';
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= APP_ID_MAX_LENGTH &&
+    APP_ID_PATTERN.test(value)
+  );
 }
 
 export function normalizeGuestId(input: unknown, fallback: string): string {

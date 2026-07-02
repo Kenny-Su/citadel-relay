@@ -289,8 +289,10 @@ describe('bundled server app registry', () => {
 
     const apps = createBundledServerApps({
       database,
-      chatRepository,
-      chessRepository,
+      appServices: {
+        chatRepository,
+        chessRepository
+      },
       enabledAppIds: ['chat', 'chess']
     });
     const context: Omit<ServerAppContext, 'participant' | 'socketId'> = {

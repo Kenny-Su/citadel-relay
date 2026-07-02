@@ -77,6 +77,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
 - The neutral bundled app config validates the JSON selection data.
 - `src/bundledApps/generatedAppCatalog.ts` is generated from app package manifest metadata and is the only static host bridge to configured app client/server registration imports.
+- Installed/generated catalog data is the host source of truth for known app ids; platform app-id validation is syntax-only.
 - The handwritten bundled app resolver owns validation and imports the generated descriptor map from the generated catalog.
 - The client registry consumes generated client registrations plus neutral shared types.
 - The server registry consumes generated server registrations and calls app-owned server service adapters through that registration contract.
@@ -98,4 +99,4 @@ Focused repository tests may still import server package surfaces directly. Runt
 
 ## Current Defaults
 
-App ids remain a closed `AppId` union. Apps share one SQLite database by default, and each app owns its own tables or live state. This document does not introduce runtime plugin loading or a package split.
+App ids are open strings validated by syntax in the platform and by installed catalog membership in the host. Apps share one SQLite database by default, and each app owns its own tables or live state. This document does not introduce runtime plugin loading or a package split.

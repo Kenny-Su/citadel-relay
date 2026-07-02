@@ -18,6 +18,7 @@ export const allClientApps = bundledClientAppDefinitions.map(
 export const clientApps = allClientApps;
 
 export const appById = new Map<AppId, ClientAppModule<unknown>>(allClientApps.map((app) => [app.appId, app]));
+const appIdSet = new Set<AppId>(allClientApps.map((app) => app.appId));
 
 export function filterClientApps(enabledAppIds: AppId[]) {
   const enabled = new Set(enabledAppIds);
@@ -73,10 +74,11 @@ function isClientManifest(value: unknown): value is Pick<AppManifest, 'appId' | 
   const manifest = value as Partial<AppManifest>;
 
   return (
-    manifest.appId === 'chat' ||
-    manifest.appId === 'chess' ||
-    manifest.appId === 'snake'
-  ) && typeof manifest.label === 'string' && typeof manifest.defaultSpaceId === 'string';
+    typeof manifest.appId === 'string' &&
+    appIdSet.has(manifest.appId) &&
+    typeof manifest.label === 'string' &&
+    typeof manifest.defaultSpaceId === 'string'
+  );
 }
 
 export type KnownAppState = unknown;
