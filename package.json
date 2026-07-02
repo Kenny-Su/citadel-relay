@@ -38,7 +38,6 @@
   "dependencies": {
     "@citadel/platform": "0.1.0",
     "@vitejs/plugin-react": "^6.0.2",
-    "chess.js": "^1.4.0",
     "concurrently": "^10.0.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -54,6 +53,7 @@
     "@types/node": "^24.0.4",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "chess.js": "^1.4.0",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.9"
   }

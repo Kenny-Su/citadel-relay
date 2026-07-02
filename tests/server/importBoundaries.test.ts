@@ -139,11 +139,13 @@ type RootPackageJson = {
   workspaces: string[];
   scripts: Record<string, string>;
   dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
 };
 
 type RootPackageLock = {
   packages: Record<string, {
     dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
     link?: boolean;
     resolved?: string;
   }>;
@@ -604,6 +606,10 @@ describe('app package import boundaries', () => {
     expect(rootPackage.dependencies.express).toBeUndefined();
     expect(rootPackage.dependencies.nanoid).toBeUndefined();
     expect(rootPackage.dependencies['socket.io']).toBeUndefined();
+    expect(rootPackage.dependencies['chess.js']).toBeUndefined();
+    expect(rootPackage.devDependencies['chess.js']).toBe('^1.4.0');
+    expect(packageLock.packages[''].dependencies?.['chess.js']).toBeUndefined();
+    expect(packageLock.packages[''].devDependencies?.['chess.js']).toBe(rootPackage.devDependencies['chess.js']);
     expect(localExternalApps.packages).toEqual([
       { packageName: '@citadel/app-chat', sourcePath: 'packages/apps/chat' },
       { packageName: '@citadel/app-chess', sourcePath: 'packages/apps/chess' },
