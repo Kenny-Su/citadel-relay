@@ -39,17 +39,23 @@
     }
   },
   "scripts": {
-    "prebuild": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
+    "prebuild": "citadel-generate-app-metadata --package-dir .",
     "build": "npm run clean && tsc -p tsconfig.build.json",
-    "prebuild:watch": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
+    "prebuild:watch": "citadel-generate-app-metadata --package-dir .",
     "build:watch": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
-    "pretypecheck": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
+    "pretypecheck": "citadel-generate-app-metadata --package-dir .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@citadel/platform": "0.1.0",
     "nanoid": "^5.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "@types/react": "^19.1.8",
+    "react": "^19.1.0",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "react": "^19.1.0"

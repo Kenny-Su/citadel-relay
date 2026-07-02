@@ -88,6 +88,18 @@ function runNpm(args, options = {}) {
   });
 }
 
+function generateAppMetadata(packageSourceDir, options = {}) {
+  execFileSync(process.execPath, [
+    join(rootDir, 'packages/platform/dist/generateAppMetadataCli.js'),
+    '--package-dir',
+    packageSourceDir
+  ], {
+    cwd: rootDir,
+    env: npmEnv(),
+    stdio: options.quiet ? ['ignore', 'ignore', 'inherit'] : 'inherit'
+  });
+}
+
 function readNpmOutput(args, options = {}) {
   return execFileSync('npm', args, {
     cwd: options.cwd ?? rootDir,
@@ -121,9 +133,10 @@ export function packLocalPackage(options) {
   if (!skipBuild) {
     if (packageName !== '@citadel/platform') {
       runNpm(['run', 'build', '-w', '@citadel/platform'], { quiet });
+      generateAppMetadata(packageSourceDir, { quiet });
     }
 
-    runNpm(['run', 'build', '--prefix', packageSourceDir], { quiet });
+    runNpm(['run', 'build', '--ignore-scripts', '--prefix', packageSourceDir], { quiet });
   }
 
   const packOutput = readNpmOutput([

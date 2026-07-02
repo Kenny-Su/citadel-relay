@@ -58,9 +58,22 @@ function runNpm(args, options = {}) {
   });
 }
 
+function generateAppMetadata(packageSourceDir, options = {}) {
+  execFileSync(process.execPath, [
+    join(rootDir, 'packages/platform/dist/generateAppMetadataCli.js'),
+    '--package-dir',
+    packageSourceDir
+  ], {
+    cwd: rootDir,
+    env: npmEnv(),
+    stdio: options.quiet ? ['ignore', 'ignore', 'inherit'] : 'inherit'
+  });
+}
+
 export function buildLocalExternalAppPackages(packageEntries, options = {}) {
   const {
     quiet = false,
+    generateMetadata = generateAppMetadata,
     runNpmCommand = runNpm,
     sourceRootDir = rootDir,
     skipPlatformBuild = false
@@ -76,7 +89,10 @@ export function buildLocalExternalAppPackages(packageEntries, options = {}) {
   }
 
   for (const app of localExternalApps) {
-    runNpmCommand(['run', 'build', '--prefix', resolve(sourceRootDir, app.sourcePath)], { quiet });
+    const packageSourceDir = resolve(sourceRootDir, app.sourcePath);
+
+    generateMetadata(packageSourceDir, { quiet });
+    runNpmCommand(['run', 'build', '--ignore-scripts', '--prefix', packageSourceDir], { quiet });
   }
 }
 
@@ -89,6 +105,7 @@ export function installLocalExternalApps(options = {}) {
 
   buildLocalExternalAppPackages(config.packages, {
     quiet,
+    generateMetadata: options.generateMetadata,
     runNpmCommand: options.runNpmCommand,
     sourceRootDir,
     skipPlatformBuild: options.skipPlatformBuild ?? false

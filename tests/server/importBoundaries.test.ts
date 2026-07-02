@@ -125,6 +125,7 @@ type PackageJson = {
   bin?: Record<string, string>;
   scripts: Record<string, string>;
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   citadel?: CitadelPackageMetadata;
 };
 
@@ -727,12 +728,21 @@ describe('app package import boundaries', () => {
       expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string')).toBe(true);
       expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string' && entry.import.startsWith('./dist/'))).toBe(true);
       expect(appPackage.scripts.build).toBe('npm run clean && tsc -p tsconfig.build.json');
+      expect(appPackage.scripts.prebuild).toBe('citadel-generate-app-metadata --package-dir .');
+      expect(appPackage.scripts['prebuild:watch']).toBe('citadel-generate-app-metadata --package-dir .');
       expect(appPackage.scripts['build:watch']).toBe(
         'tsc -p tsconfig.build.json --watch --preserveWatchOutput'
       );
       expect(appPackage.scripts.clean).toBe("node -e \"fs.rmSync('dist', { recursive: true, force: true })\"");
+      expect(appPackage.scripts.pretypecheck).toBe('citadel-generate-app-metadata --package-dir .');
       expect(appPackage.scripts.typecheck).toBe('tsc -p tsconfig.json --noEmit');
       expect(appPackage.dependencies?.['@citadel/platform']).toBe('0.1.0');
+      expect(appPackage.devDependencies).toMatchObject({
+        '@types/node': '^24.0.4',
+        '@types/react': '^19.1.8',
+        react: '^19.1.0',
+        typescript: '^6.0.3'
+      });
     }
   });
 
@@ -798,10 +808,15 @@ describe('app package import boundaries', () => {
     for (const app of firstPartyApps) {
       const appConfig = jsonSource<PackageTsconfig>(`${app.packagePath}/tsconfig.json`);
 
-      expect(appConfig.extends).toBe('../../../tsconfig.package-base.json');
+      expect(appConfig.extends).toBeUndefined();
       expect(appConfig.include).toEqual(['src/**/*.ts', 'src/**/*.tsx']);
       expect(appConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
-      expect(appConfig.compilerOptions).toBeUndefined();
+      expect(appConfig.compilerOptions).toMatchObject({
+        moduleResolution: 'Bundler',
+        noEmit: true,
+        jsx: 'react-jsx'
+      });
+      expect(appConfig.compilerOptions).not.toHaveProperty('paths');
     }
   });
 
@@ -827,6 +842,8 @@ describe('app package import boundaries', () => {
     expect(packLocalPackage).toContain('resolveLocalExternalAppSourceDir');
     expect(packLocalPackage).toContain("'--prefix'");
     expect(packLocalPackage).toContain("['run', 'build', '-w', '@citadel/platform']");
+    expect(packLocalPackage).toContain('generateAppMetadata(packageSourceDir');
+    expect(packLocalPackage).toContain("'--ignore-scripts'");
     expect(packLocalPackage).not.toContain("['run', 'build', '-w', packageName]");
     expect(installPackedLocalPackage).toContain("join(installRootDir, 'node_modules'");
     expect(installPackedLocalPackage).toContain('installLocalRuntimeDependencies');
@@ -838,6 +855,8 @@ describe('app package import boundaries', () => {
     expect(installLocalExternalApps).toContain('--skip-platform-build');
     expect(installLocalExternalApps).toContain("['run', 'build', '-w', '@citadel/platform']");
     expect(installLocalExternalApps).toContain("'--prefix'");
+    expect(installLocalExternalApps).toContain('generateAppMetadata(packageSourceDir');
+    expect(installLocalExternalApps).toContain("'--ignore-scripts'");
     expect(installLocalExternalApps).not.toContain("['run', 'build', '-w', packageName]");
     expect(installLocalExternalApps).toContain('skipBuild: true');
     expect(packageBuildBase.extends).toBe('./tsconfig.package-base.json');
@@ -854,12 +873,19 @@ describe('app package import boundaries', () => {
     for (const packagePath of workspacePackagePaths) {
       const buildConfig = jsonSource<PackageTsconfig>(`${packagePath}/tsconfig.build.json`);
 
-      expect(buildConfig.extends).toMatch(/tsconfig\.package-build-base\.json$/);
       if (packagePath === 'packages/platform') {
+        expect(buildConfig.extends).toMatch(/tsconfig\.package-build-base\.json$/);
         expect(buildConfig.compilerOptions).toEqual({ outDir: 'dist', rootDir: 'src' });
       } else {
+        expect(buildConfig.extends).toBe('./tsconfig.json');
         expect(buildConfig.compilerOptions?.outDir).toBe('dist');
         expect(buildConfig.compilerOptions?.rootDir).toBe('src');
+        expect(buildConfig.compilerOptions).toMatchObject({
+          declaration: true,
+          noEmit: false,
+          noEmitOnError: true,
+          sourceMap: true
+        });
         expect(buildConfig.compilerOptions).not.toHaveProperty('paths');
       }
       expect(buildConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
@@ -954,9 +980,9 @@ describe('app package import boundaries', () => {
       const clientImportPath = `${packageName}/${metadata.client.subpath.slice(2)}`;
       const serverImportPath = `${packageName}/${metadata.server.subpath.slice(2)}`;
 
-      expect(appPackageJson.scripts?.prebuild).toBe('node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .');
-      expect(appPackageJson.scripts?.['prebuild:watch']).toBe('node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .');
-      expect(appPackageJson.scripts?.pretypecheck).toBe('node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .');
+      expect(appPackageJson.scripts?.prebuild).toBe('citadel-generate-app-metadata --package-dir .');
+      expect(appPackageJson.scripts?.['prebuild:watch']).toBe('citadel-generate-app-metadata --package-dir .');
+      expect(appPackageJson.scripts?.pretypecheck).toBe('citadel-generate-app-metadata --package-dir .');
       expect(generatedMetadataSource).toContain(`appId: "${metadata.appId}"`);
       expect(generatedMetadataSource).toContain(`label: "${metadata.label}"`);
       expect(generatedMetadataSource).toContain(`defaultSpaceId: "${metadata.defaultSpaceId}"`);
