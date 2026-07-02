@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error The generator is a Node ESM script exercised directly by Vitest.
-import { generateInstalledAppCatalog, resolveAppPackages, resolveInstalledPackageJsonPath, runGenerator, validatePackageName } from '../../scripts/generate-bundled-apps.mjs';
+import { generateInstalledAppCatalog, readConfig, resolveAppPackages, resolveInstalledPackageJsonPath, runGenerator, validatePackageName } from '../../scripts/generate-bundled-apps.mjs';
 // @ts-expect-error The local external app installer is a Node ESM script exercised directly by Vitest.
 import { installLocalExternalApps } from '../../scripts/install-local-external-apps.mjs';
 // @ts-expect-error The installer is a Node ESM script exercised directly by Vitest.
@@ -353,6 +353,27 @@ describe('bundled app generator package resolution', () => {
     expect(generateInstalledAppCatalog([appPackage])).toContain(
       "import { demoNodeRegistration as bundledServerRegistration0 } from '@example/app-demo/node';"
     );
+  });
+
+  it('validates bundled app config JSON shape before package resolution', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
+    const configPath = join(tempDir, 'bundled-apps.json');
+
+    writeFileSync(configPath, JSON.stringify({
+      packages: ['@example/app-demo']
+    }));
+    expect(readConfig(configPath)).toEqual({
+      packages: ['@example/app-demo']
+    });
+
+    writeFileSync(configPath, JSON.stringify({}));
+    expect(() => readConfig(configPath)).toThrow('bundled-apps.json must contain a packages array');
+
+    writeFileSync(configPath, JSON.stringify({ packages: '@example/app-demo' }));
+    expect(() => readConfig(configPath)).toThrow('bundled-apps.json must contain a packages array');
+
+    writeFileSync(configPath, JSON.stringify({ packages: ['@example/app-demo', 7] }));
+    expect(() => readConfig(configPath)).toThrow('bundled-apps.json packages must contain only strings');
   });
 
   it('resolves workspace symlinks through node_modules package directories', () => {

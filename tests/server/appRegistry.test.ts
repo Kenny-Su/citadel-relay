@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -14,13 +14,15 @@ import {
   bundledAppDefinitions,
   bundledAppIds
 } from '../../src/bundledApps/catalog.js';
-import {
-  bundledAppsConfig,
-  bundledAppPackageNames,
-  parseBundledAppsConfig
-} from '../../src/bundledApps/config.js';
-import { resolveBundledAppDefinitions } from '../../src/bundledApps/resolver.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+
+type BundledAppsConfig = {
+  packages: string[];
+};
+
+function bundledAppsConfig() {
+  return JSON.parse(readFileSync(join(process.cwd(), 'bundled-apps.json'), 'utf8')) as BundledAppsConfig;
+}
 
 describe('bundled server app registry', () => {
   let tempDir: string;
@@ -43,14 +45,16 @@ describe('bundled server app registry', () => {
   });
 
   it('exposes bundled manifests in app order', () => {
-    expect(bundledAppsConfig).toEqual({
+    const config = bundledAppsConfig();
+
+    expect(config).toEqual({
       packages: [
         '@citadel/app-chat',
         '@citadel/app-chess',
         '@citadel/app-snake'
       ]
     });
-    expect(bundledAppPackageNames).toEqual([
+    expect(config.packages).toEqual([
       '@citadel/app-chat',
       '@citadel/app-chess',
       '@citadel/app-snake'
@@ -91,33 +95,10 @@ describe('bundled server app registry', () => {
     expect(bundledServerAppBundles.map((bundle) => bundle.appId)).toEqual(bundledAppIds);
   });
 
-  it('resolves declarative bundled app package config with validation', () => {
-    expect(parseBundledAppsConfig({
-      packages: [
-        '@citadel/app-chat',
-        '@citadel/app-chess',
-        '@citadel/app-snake'
-      ]
-    })).toEqual(bundledAppsConfig);
-    expect(() => parseBundledAppsConfig({})).toThrow('Bundled apps config must contain a packages array');
-    expect(() => parseBundledAppsConfig({ packages: '@citadel/app-chat' })).toThrow(
-      'Bundled apps config packages must be an array'
+  it('keeps the generated catalog aligned with declarative bundled app package config', () => {
+    expect(bundledAppDefinitions.map((definition) => definition.packageName)).toEqual(
+      bundledAppsConfig().packages
     );
-    expect(() => parseBundledAppsConfig({ packages: ['@citadel/app-chat', 7] })).toThrow(
-      'Bundled apps config packages must contain only strings'
-    );
-    expect(resolveBundledAppDefinitions(bundledAppPackageNames)).toEqual(bundledAppDefinitions);
-    expect(resolveBundledAppDefinitions([
-      '@citadel/app-snake',
-      '@citadel/app-chat'
-    ]).map((definition) => definition.appId)).toEqual(['snake', 'chat']);
-    expect(() => resolveBundledAppDefinitions([
-      '@citadel/app-chat',
-      '@citadel/app-chat'
-    ])).toThrow('Duplicate bundled app id: chat');
-    expect(() => resolveBundledAppDefinitions([
-      '@citadel/app-missing'
-    ])).toThrow('Unknown bundled app package: @citadel/app-missing');
   });
 
   it('parses enabled app configuration with defaults and fallback', () => {
