@@ -1,10 +1,11 @@
 import type { Participant } from '@citadel/platform/app';
 import type { ServerAppContext, ServerAppModule } from '@citadel/platform/server-app';
-import type { SnakeDirection, SnakeDirectionPayload, SnakePlayer, SnakeSegment, SnakeState } from './shared.js';
+import type { SnakeDirection, SnakeDirectionPayload, SnakePlayer, SnakeReadyPayload, SnakeSegment, SnakeState } from './shared.js';
 
 const WIDTH = 20;
 const HEIGHT = 16;
 const TICK_MS = 220;
+const REQUIRED_READY_COUNT = 2;
 const COLORS = ['#1f6f54', '#7c3aed', '#c2410c', '#0369a1', '#be123c', '#4d7c0f'];
 
 type SnakeSpaceState = SnakeState & {
@@ -53,6 +54,7 @@ function spawnSnake(participant: Participant, index: number): SnakePlayer {
     ],
     direction: 'right',
     alive: true,
+    ready: false,
     score: 0,
     color: COLORS[index % COLORS.length]
   };
@@ -60,10 +62,14 @@ function spawnSnake(participant: Participant, index: number): SnakePlayer {
 
 function publicState(state: SnakeSpaceState): SnakeState {
   return {
+    stage: state.stage,
     width: state.width,
     height: state.height,
     food: state.food,
     snakes: state.snakes,
+    requiredReadyCount: state.requiredReadyCount,
+    readyCount: state.readyCount,
+    spectatorCount: state.spectatorCount,
     tick: state.tick
   };
 }
@@ -76,28 +82,80 @@ function getOrCreateState(context: Pick<ServerAppContext, 'getAppState' | 'setAp
   }
 
   const state: SnakeSpaceState = {
+    stage: 'waiting',
     width: WIDTH,
     height: HEIGHT,
     food: { x: 10, y: 8 },
     snakes: [],
+    requiredReadyCount: REQUIRED_READY_COUNT,
+    readyCount: 0,
+    spectatorCount: 0,
     tick: 0
   };
   context.setAppState(state);
   return state;
 }
 
-function syncParticipants(state: SnakeSpaceState, participants: Participant[]) {
-  const participantIds = new Set(participants.map((participant) => participant.id));
-  state.snakes = state.snakes.filter((snake) => participantIds.has(snake.participantId));
+function resetToWaiting(state: SnakeSpaceState) {
+  state.stage = 'waiting';
+  state.tick = 0;
+  state.snakes = state.snakes.map((snake) => ({
+    ...snake,
+    ready: false
+  }));
+}
 
-  for (const participant of participants) {
+function refreshReadyCounts(state: SnakeSpaceState, participants: Participant[]) {
+  state.requiredReadyCount = REQUIRED_READY_COUNT;
+  state.readyCount = state.snakes.filter((snake) => snake.ready).length;
+  state.spectatorCount = Math.max(0, participants.length - state.snakes.length);
+}
+
+function syncParticipants(state: SnakeSpaceState, participants: Participant[]) {
+  const playerParticipants = participants.slice(0, REQUIRED_READY_COUNT);
+  const playerIds = new Set(playerParticipants.map((participant) => participant.id));
+  const previousPlayerIds = new Set(state.snakes.map((snake) => snake.participantId));
+  const activePlayerLeft = state.snakes.some((snake) => !playerIds.has(snake.participantId));
+
+  state.snakes = state.snakes.filter((snake) => playerIds.has(snake.participantId));
+
+  for (const participant of playerParticipants) {
     if (!state.snakes.some((snake) => snake.participantId === participant.id)) {
       state.snakes.push(spawnSnake(participant, state.snakes.length));
+    } else {
+      const snake = state.snakes.find((candidate) => candidate.participantId === participant.id);
+
+      if (snake) {
+        snake.name = participant.name;
+      }
     }
   }
 
+  if (activePlayerLeft || state.snakes.some((snake) => !previousPlayerIds.has(snake.participantId))) {
+    resetToWaiting(state);
+  }
+
+  refreshReadyCounts(state, participants);
+
   if (!state.food) {
     state.food = makeFood(state.snakes);
+  }
+}
+
+function maybeStartGame(
+  state: SnakeSpaceState,
+  context: ServerAppContext,
+  ensureTimer: (context: ServerAppContext) => void
+) {
+  refreshReadyCounts(state, context.participants);
+
+  if (
+    state.stage === 'waiting'
+    && state.snakes.length === REQUIRED_READY_COUNT
+    && state.readyCount === REQUIRED_READY_COUNT
+  ) {
+    state.stage = 'playing';
+    ensureTimer(context);
   }
 }
 
@@ -139,7 +197,7 @@ export function createSnakeApp(): ServerAppModule {
   function ensureTimer(context: ServerAppContext) {
     const state = getOrCreateState(context);
 
-    if (state.timer) {
+    if (state.stage !== 'playing' || state.timer) {
       return;
     }
 
@@ -151,6 +209,11 @@ export function createSnakeApp(): ServerAppModule {
       }
 
       const latestState = getOrCreateState(latestContext);
+      if (latestState.stage !== 'playing') {
+        stopTimer(latestState);
+        return;
+      }
+
       advance(latestState);
       latestContext.emitToSpace('snake:state', publicState(latestState));
     }, TICK_MS);
@@ -175,7 +238,21 @@ export function createSnakeApp(): ServerAppModule {
       const state = getOrCreateState(context);
       syncParticipants(state, context.participants);
 
-      if (event.type !== 'snake:direction') {
+      if (event.type === 'snake:ready') {
+        const payload = (event.payload ?? {}) as SnakeReadyPayload;
+        const snake = state.snakes.find((candidate) => candidate.participantId === context.participant.id);
+
+        if (!snake || state.stage !== 'waiting') {
+          return;
+        }
+
+        snake.ready = payload.ready ?? true;
+        maybeStartGame(state, context, ensureTimer);
+        context.emitToSpace('snake:state', publicState(state));
+        return;
+      }
+
+      if (event.type !== 'snake:direction' || state.stage !== 'playing') {
         return;
       }
 
@@ -196,11 +273,12 @@ export function createSnakeApp(): ServerAppModule {
       contextsBySpace.set(context.spaceId, context);
       const state = getOrCreateState(context);
       syncParticipants(state, context.participants);
-      ensureTimer(context);
+      maybeStartGame(state, context, ensureTimer);
       context.emitToSpace('snake:state', publicState(state));
     },
     onParticipantLeft(context) {
       const state = getOrCreateState(context);
+      const previousStage = state.stage;
       syncParticipants(state, context.participants);
 
       if (context.participants.length === 0) {
@@ -208,6 +286,9 @@ export function createSnakeApp(): ServerAppModule {
         contextsBySpace.delete(context.spaceId);
       } else {
         contextsBySpace.set(context.spaceId, context);
+        if (previousStage === 'playing' && state.stage === 'waiting') {
+          stopTimer(state);
+        }
       }
 
       context.emitToSpace('snake:state', publicState(state));

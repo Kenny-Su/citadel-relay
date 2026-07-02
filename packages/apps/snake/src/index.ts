@@ -6,7 +6,9 @@ export type {
   SnakeDirection,
   SnakeDirectionPayload,
   SnakePlayer,
+  SnakeReadyPayload,
   SnakeSegment,
+  SnakeStage,
   SnakeState
 } from './shared.js';
 

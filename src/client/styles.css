@@ -380,6 +380,14 @@ textarea:focus {
   border-radius: 999px;
 }
 
+.snake-lobby {
+  align-items: center;
+  color: #66756c;
+  display: flex;
+  justify-content: center;
+  min-height: 42px;
+}
+
 .snake-controls {
   display: grid;
   gap: 8px;

@@ -286,6 +286,28 @@ describe('app package import boundaries', () => {
     );
   });
 
+  it('keeps snake stage rules out of platform and host assembly', () => {
+    const forbiddenSnakeStageLogic =
+      /snake:ready|SnakeStage|stage: ['"](?:waiting|playing)['"]|['"](?:waiting|playing)['"]|requiredReadyCount|readyCount|spectatorCount/;
+    const hostRuntimeFiles = [
+      'src/bundledApps/serverRegistry.ts',
+      'src/bundledApps/catalog.ts',
+      'src/client/appRegistry.tsx',
+      'src/server/chatServer.ts'
+    ];
+
+    for (const moduleName of platformSourceModuleNames) {
+      expect(source(`packages/platform/src/${moduleName}.ts`)).not.toMatch(forbiddenSnakeStageLogic);
+    }
+
+    for (const fileName of hostRuntimeFiles) {
+      expect(source(fileName)).not.toMatch(forbiddenSnakeStageLogic);
+    }
+
+    expect(source(appImplementationPath('snake', 'server.ts'))).toContain('snake:ready');
+    expect(source(appImplementationPath('snake', 'shared.ts'))).toContain('SnakeStage');
+  });
+
   it('keeps neutral app indexes limited to manifests and shared types', () => {
     for (const appId of appIds) {
       const indexSource = source(appImplementationPath(appId, 'index.ts'));

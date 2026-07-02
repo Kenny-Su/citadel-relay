@@ -401,24 +401,97 @@ describe('platform socket', () => {
     expect(chessState.fen).toContain(' b ');
   });
 
-  it('creates snake state, accepts directions, and removes snakes on disconnect', async () => {
+  it('keeps snake waiting until both players are ready, then accepts directions', async () => {
     const ada = await connectClient();
     const grace = await connectClient();
+    const linus = await connectClient();
 
     const initialState = await joinSpace(ada, 'Ada', 'snake', 'arena');
-    expect((initialState.appState as SnakeState).snakes).toHaveLength(1);
+    const initialSnakeState = initialState.appState as SnakeState;
+    expect(initialSnakeState).toMatchObject({
+      stage: 'waiting',
+      readyCount: 0,
+      requiredReadyCount: 2,
+      spectatorCount: 0
+    });
+    expect(initialSnakeState.snakes).toHaveLength(1);
 
-    await joinSpace(grace, 'Grace', 'snake', 'arena');
+    let directionBeforeReadyAccepted = false;
+    ada.on('app:event', (event: AppEventEnvelope<SnakeState>) => {
+      if (event.type === 'snake:state' && event.payload?.stage === 'playing') {
+        directionBeforeReadyAccepted = true;
+      }
+    });
+    ada.emit('app:event', {
+      appId: 'snake',
+      type: 'snake:direction',
+      payload: { direction: 'down' }
+    });
+    await wait(260);
+    expect(directionBeforeReadyAccepted).toBe(false);
+
+    const graceState = await joinSpace(grace, 'Grace', 'snake', 'arena');
+    expect(graceState.appState as SnakeState).toMatchObject({
+      stage: 'waiting',
+      readyCount: 0,
+      spectatorCount: 0
+    });
+
+    const spectatorState = await joinSpace(linus, 'Linus', 'snake', 'arena');
+    expect(spectatorState.appState as SnakeState).toMatchObject({
+      stage: 'waiting',
+      readyCount: 0,
+      spectatorCount: 1
+    });
+    expect((spectatorState.appState as SnakeState).snakes).toHaveLength(2);
+    const spectatorHasSnake = (spectatorState.appState as SnakeState).snakes.some(
+      (snake) => snake.participantId === 'guest-linus'
+    );
+    expect(spectatorHasSnake).toBe(false);
+
+    linus.emit('app:event', {
+      appId: 'snake',
+      type: 'snake:ready'
+    });
+
+    const adaReady = onceAppEvent<SnakeState>(ada, 'snake:state');
+    ada.emit('app:event', {
+      appId: 'snake',
+      type: 'snake:ready'
+    });
+    expect(await adaReady).toMatchObject({
+      stage: 'waiting',
+      readyCount: 1
+    });
+
+    const graceReady = onceAppEvent<SnakeState>(ada, 'snake:state');
+    grace.emit('app:event', {
+      appId: 'snake',
+      type: 'snake:ready'
+    });
+    expect(await graceReady).toMatchObject({
+      stage: 'playing',
+      readyCount: 2
+    });
+
     const snakeUpdate = onceAppEvent<SnakeState>(ada, 'snake:state');
     grace.emit('app:event', {
       appId: 'snake',
       type: 'snake:direction',
       payload: { direction: 'down' }
     });
-    expect((await snakeUpdate).snakes).toHaveLength(2);
+    expect(await snakeUpdate).toMatchObject({
+      stage: 'playing',
+      spectatorCount: 1
+    });
 
+    const resetState = onceAppEvent<SnakeState>(ada, 'snake:state');
     grace.close();
-    await wait(40);
+    expect(await resetState).toMatchObject({
+      stage: 'waiting',
+      readyCount: 0
+    });
+
     const state = server.apps.get('snake');
     expect(state).toBeDefined();
   });
@@ -426,6 +499,7 @@ describe('platform socket', () => {
   it('keeps snake state ephemeral across server restarts', async () => {
     const ada = await connectClient();
     const initialState = await joinSpace(ada, 'Ada', 'snake', 'arena');
+    expect((initialState.appState as SnakeState).stage).toBe('waiting');
     expect((initialState.appState as SnakeState).snakes).toHaveLength(1);
 
     clients.forEach((client) => client.close());
@@ -451,6 +525,7 @@ describe('platform socket', () => {
 
     const reconnectedAda = await connectClient();
     const state = await joinSpace(reconnectedAda, 'Ada', 'snake', 'arena');
+    expect((state.appState as SnakeState).stage).toBe('waiting');
     expect((state.appState as SnakeState).tick).toBe(0);
     expect((state.appState as SnakeState).snakes).toHaveLength(1);
   });

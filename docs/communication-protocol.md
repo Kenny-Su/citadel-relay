@@ -114,10 +114,11 @@ Chess games and moves are persisted by space, so stable guest ids preserve white
 
 Snake:
 
+- client `snake:ready` with optional `{ ready: boolean }`
 - client `snake:direction` with `{ direction: "up" | "down" | "left" | "right" }`
 - server `snake:state`
 
-Snake state is live-only in this version.
+Snake state is live-only in this version. Snake starts in an app-owned waiting stage and begins play after both active players are ready.
 
 ## Validation
 

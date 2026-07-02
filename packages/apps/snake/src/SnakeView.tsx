@@ -58,20 +58,50 @@ export function SnakeView({
 
   function directionButton(direction: SnakeDirection, label: string) {
     return (
-      <button type="button" onClick={() => sendAppEvent('snake:direction', { direction })}>
+      <button
+        type="button"
+        disabled={state.stage !== 'playing'}
+        onClick={() => sendAppEvent('snake:direction', { direction })}
+      >
         {label}
       </button>
     );
   }
 
   const mySnake = state.snakes.find((snake) => snake.participantId === currentParticipant.id);
+  const isSpectator = !mySnake;
+  const statusText = isSpectator
+    ? 'Spectating'
+    : state.stage === 'waiting'
+      ? mySnake.ready
+        ? 'Ready'
+        : 'Waiting'
+      : mySnake.alive === false
+        ? 'You crashed'
+        : 'Playing';
 
   return (
     <section className="game-surface" aria-label="Snake arena">
       <div className="game-status">
-        <strong>{mySnake?.alive === false ? 'You crashed' : 'Stay alive'}</strong>
+        <strong>{statusText}</strong>
         <span>Score {mySnake?.score ?? 0}</span>
+        <span>{state.readyCount}/{state.requiredReadyCount} ready</span>
+        {state.spectatorCount > 0 ? <span>{state.spectatorCount} spectating</span> : null}
       </div>
+      {state.stage === 'waiting' && (
+        <div className="snake-lobby">
+          {isSpectator ? (
+            <span>Waiting for the two players to start.</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => sendAppEvent('snake:ready', { ready: !mySnake.ready })}
+            >
+              {mySnake.ready ? 'Cancel Ready' : 'Ready'}
+            </button>
+          )}
+        </div>
+      )}
       <div
         className="snake-board"
         style={{
