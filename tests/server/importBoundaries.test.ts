@@ -474,6 +474,9 @@ describe('app package import boundaries', () => {
     );
     expect(socketTest).toContain('../../src/server/citadelServer.js');
     expect(socketTest).not.toContain('../../src/server/chatServer.js');
+    expect(socketTest).not.toMatch(
+      /@citadel\/app-(?:chat|chess)\/server|chatRepository|chessRepository|messageStore|messageRateLimit|createChatRepository|createChessRepository/
+    );
   });
 
   it('keeps app client code away from server-only surfaces', () => {
