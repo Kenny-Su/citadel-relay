@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const firstPartyWorkspaceApps = [
+const firstPartyApps = [
   {
     appId: 'chat',
     packageName: '@citadel/app-chat',
@@ -55,8 +55,8 @@ const firstPartyWorkspaceApps = [
     ]
   }
 ] as const;
-const firstPartyAppIds = firstPartyWorkspaceApps.map((app) => app.appId);
-type FirstPartyAppId = (typeof firstPartyWorkspaceApps)[number]['appId'];
+const firstPartyAppIds = firstPartyApps.map((app) => app.appId);
+type FirstPartyAppId = (typeof firstPartyApps)[number]['appId'];
 const platformEntrypointNames = ['app', 'client', 'persistence', 'server', 'server-app', 'validation'] as const;
 const platformSourceModuleNames = [
   'app',
@@ -282,7 +282,7 @@ const forbiddenPackageExportPattern =
   /(?:^\.(?:\/src|\/dist\/src)(?:\/|$)|(?:View|repository|messageStore|serverEntry|manifest|shared)\.(?:js|ts|tsx)$|(?:^|\/)(?:ChatView|ChessView|SnakeView|repository|messageStore|serverEntry|manifest|shared)(?:$|\/))/;
 
 function firstPartyApp(appId: FirstPartyAppId) {
-  const app = firstPartyWorkspaceApps.find((candidate) => candidate.appId === appId);
+  const app = firstPartyApps.find((candidate) => candidate.appId === appId);
 
   if (!app) {
     throw new Error(`Unknown first-party app: ${appId}`);
@@ -291,8 +291,8 @@ function firstPartyApp(appId: FirstPartyAppId) {
   return app;
 }
 
-function firstPartyWorkspaceAppForPackageName(packageName: string) {
-  const app = firstPartyWorkspaceApps.find((candidate) => candidate.packageName === packageName);
+function firstPartyAppForPackageName(packageName: string) {
+  const app = firstPartyApps.find((candidate) => candidate.packageName === packageName);
 
   if (!app) {
     throw new Error(`Unknown first-party app package: ${packageName}`);
@@ -609,7 +609,7 @@ describe('app package import boundaries', () => {
       expect(packageLock.packages[`node_modules/${packageName}`]).toBeUndefined();
     }
     for (const { packageName, sourcePath } of localExternalApps.packages) {
-      const app = firstPartyWorkspaceAppForPackageName(packageName);
+      const app = firstPartyAppForPackageName(packageName);
 
       expect(bundledPackageNames.has(packageName)).toBe(true);
       expect(sourcePath).toBe(app.packagePath);
@@ -656,7 +656,7 @@ describe('app package import boundaries', () => {
     expect(Object.keys(rootPackage.scripts).some((scriptName) => scriptName.startsWith('pack:app-'))).toBe(false);
     expect(rootPackage.scripts['clean:packages']).toBe('npm run clean -w @citadel/platform');
     expect(rootPackage.workspaces).toContain('packages/platform');
-    for (const app of firstPartyWorkspaceApps) {
+    for (const app of firstPartyApps) {
       expect(rootPackage.workspaces).not.toContain(app.packagePath);
     }
     expect(platformPackage.name).toBe('@citadel/platform');
@@ -684,7 +684,7 @@ describe('app package import boundaries', () => {
       'socket.io': '^4.8.1'
     });
 
-    for (const app of firstPartyWorkspaceApps) {
+    for (const app of firstPartyApps) {
       const appPackage = jsonSource<PackageJson>(`${app.packagePath}/package.json`);
 
       expect(appPackage.name).toBe(app.packageName);
@@ -776,7 +776,7 @@ describe('app package import boundaries', () => {
     expect(platformConfig.include).toEqual(['*.ts', 'src/**/*.ts']);
     expect(platformConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
 
-    for (const app of firstPartyWorkspaceApps) {
+    for (const app of firstPartyApps) {
       const appConfig = jsonSource<PackageTsconfig>(`${app.packagePath}/tsconfig.json`);
 
       expect(appConfig.extends).toBe('../../../tsconfig.package-base.json');
@@ -855,7 +855,7 @@ describe('app package import boundaries', () => {
     expect(source('packages/platform/server.ts').trim()).toBe("export * from './src/server.js';");
     expect(source('packages/platform/validation.ts').trim()).toBe("export * from './src/validation.js';");
 
-    for (const app of firstPartyWorkspaceApps) {
+    for (const app of firstPartyApps) {
       expect(source(`${app.packagePath}/index.ts`).trim()).toBe("export * from './src/index.js';");
       expect(source(`${app.packagePath}/client.ts`).trim()).toBe("export * from './src/client.js';");
       expect(source(`${app.packagePath}/server.ts`).trim()).toBe("export * from './src/server.js';");
@@ -868,7 +868,7 @@ describe('app package import boundaries', () => {
       expect(exists(`src/platform/${moduleName}.ts`)).toBe(false);
     }
 
-    for (const app of firstPartyWorkspaceApps) {
+    for (const app of firstPartyApps) {
       for (const fileName of app.shimFiles) {
         expect(exists(`src/apps/${app.appId}/${fileName}`)).toBe(false);
       }
