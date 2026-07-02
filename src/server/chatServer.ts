@@ -1,7 +1,6 @@
-import { createPlatformServer, type PlatformServerOptions } from '@citadel/platform/server';
 import type { AppId } from '@citadel/platform/app';
-import { createBundledServerApps, filterAppManifests } from '../bundledApps/serverRegistry.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { createCitadelServer, type CitadelServerOptions } from './citadelServer.js';
 import {
   createLegacyAppServiceBag,
   readLegacyAppRepositoryOptions,
@@ -9,7 +8,7 @@ import {
   type LegacyAppRepositoryOptionFields
 } from './legacyAppRepositories.js';
 
-export type ChatServerOptions = Omit<PlatformServerOptions, 'apps'> & {
+export type ChatServerOptions = Omit<CitadelServerOptions, 'appServices' | 'enabledAppIdsInput'> & {
   database?: CitadelDatabase;
   enabledAppIds?: AppId[];
 } & LegacyAppRepositoryOptionFields;
@@ -21,27 +20,26 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
     typeof options === 'string'
       ? openCitadelDatabase(process.env.CHAT_DB_PATH ?? 'data/citadel.sqlite')
       : (options.database ??
-        openCitadelDatabase(process.env.CHAT_DB_PATH ?? process.env.CITADEL_DB_PATH ?? 'data/citadel.sqlite'));
+        openCitadelDatabase(
+          process.env.CHAT_DB_PATH
+            ?? options.databasePath
+            ?? process.env.CITADEL_DB_PATH
+            ?? 'data/citadel.sqlite'
+        ));
   const legacyOptions = readLegacyAppRepositoryOptions(options);
-  const services = {
-    database,
-    enabledAppIds: typeof options === 'string' ? undefined : options.enabledAppIds
-  };
+  const enabledAppIds = typeof options === 'string' ? undefined : options.enabledAppIds;
   const repositories = resolveLegacyAppRepositories({
     database,
     ...legacyOptions
   });
-  const appManifests = services.enabledAppIds ? filterAppManifests(services.enabledAppIds) : undefined;
 
   return {
-    ...createPlatformServer({
+    ...createCitadelServer({
       clientOrigin,
       staticDir: typeof options === 'string' ? undefined : options.staticDir,
-      appManifests,
-      apps: createBundledServerApps({
-        ...services,
-        appServices: createLegacyAppServiceBag(repositories, legacyOptions, services.enabledAppIds)
-      })
+      database,
+      enabledAppIds,
+      appServices: createLegacyAppServiceBag(repositories, legacyOptions, enabledAppIds)
     }),
     database,
     messageStore: repositories.messageStore,

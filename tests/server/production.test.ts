@@ -3,16 +3,14 @@ import { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createChatServer } from '../../src/server/chatServer.js';
-import { createChatRepository } from '@citadel/app-chat/server';
-import { createChessRepository } from '@citadel/app-chess/server';
+import { createCitadelServer } from '../../src/server/citadelServer.js';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 
 const staticDir = resolve(process.cwd(), 'dist');
 const hasBuiltClient = existsSync(join(staticDir, 'index.html'));
 
 describe.skipIf(!hasBuiltClient)('production server', () => {
-  let server: ReturnType<typeof createChatServer>;
+  let server: ReturnType<typeof createCitadelServer>;
   let tempDir: string;
   let database: CitadelDatabase;
   let url: string;
@@ -20,11 +18,9 @@ describe.skipIf(!hasBuiltClient)('production server', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-platform-production-'));
     database = openCitadelDatabase(join(tempDir, 'citadel.sqlite'));
-    server = createChatServer({
+    server = createCitadelServer({
       clientOrigin: '*',
       database,
-      chatRepository: createChatRepository(database.database),
-      chessRepository: createChessRepository(database.database),
       staticDir
     });
     await new Promise<void>((resolveListen) =>
