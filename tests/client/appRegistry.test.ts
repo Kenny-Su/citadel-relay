@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { bundledAppIds } from '../../src/bundledApps/catalog';
+import { bundledAppIds, bundledClientRegistrations } from '../../src/bundledApps/catalog';
 import {
   allClientApps,
   createClientAppsFromManifests,
   filterClientApps
 } from '../../src/client/appRegistry';
-import { bundledClientRegistrationByPackageName } from '../../src/bundledApps/generatedAppCatalog';
 
 describe('client app registry', () => {
   it('exposes bundled client app modules in app order', () => {
@@ -13,18 +12,12 @@ describe('client app registry', () => {
   });
 
   it('exposes public client registrations in app order', () => {
-    const registrations = [
-      bundledClientRegistrationByPackageName['@citadel/app-chat'],
-      bundledClientRegistrationByPackageName['@citadel/app-chess'],
-      bundledClientRegistrationByPackageName['@citadel/app-snake']
-    ];
-
-    expect(registrations.map((registration) => registration.appId)).toEqual([
+    expect(bundledClientRegistrations.map((registration) => registration.appId)).toEqual([
       'chat',
       'chess',
       'snake'
     ]);
-    expect(registrations.map((registration) => registration.clientApp.appId)).toEqual([
+    expect(bundledClientRegistrations.map((registration) => registration.clientApp.appId)).toEqual([
       'chat',
       'chess',
       'snake'
@@ -57,8 +50,12 @@ describe('client app registry', () => {
       { appId: 'snake', label: 'Snake from server', defaultSpaceId: 'arena' },
       { appId: 'chat', label: 'Chat from server', defaultSpaceId: 'lobby' }
     ]);
-    expect(apps?.[0]?.View).toBe(bundledClientRegistrationByPackageName['@citadel/app-snake'].clientApp.View);
-    expect(apps?.[1]?.View).toBe(bundledClientRegistrationByPackageName['@citadel/app-chat'].clientApp.View);
+    expect(apps?.[0]?.View).toBe(
+      bundledClientRegistrations.find((registration) => registration.appId === 'snake')?.clientApp.View
+    );
+    expect(apps?.[1]?.View).toBe(
+      bundledClientRegistrations.find((registration) => registration.appId === 'chat')?.clientApp.View
+    );
   });
 
   it('returns null when manifest input cannot produce local client apps', () => {

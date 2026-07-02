@@ -427,7 +427,7 @@ describe('app package import boundaries', () => {
     const generatedCatalog = source('src/bundledApps/generatedAppCatalog.ts');
 
     expect(registry).toContain("from '../bundledApps/catalog'");
-    expect(registry).toContain("from '../bundledApps/generatedAppCatalog'");
+    expect(registry).not.toContain('generatedAppCatalog');
     expect(registry).toContain("from '@citadel/platform/app'");
     expect(registry).toContain("from '@citadel/platform/client'");
     for (const packageName of bundledApps.packages) {
@@ -455,7 +455,7 @@ describe('app package import boundaries', () => {
 
     expect(registry).toContain("from './catalog.js'");
     expect(registry).toContain("from '@citadel/platform/server-app'");
-    expect(registry).toContain("from './generatedAppCatalog.js'");
+    expect(registry).not.toContain('generatedAppCatalog');
     for (const packageName of bundledApps.packages) {
       const metadata = installedCitadelMetadata(packageName);
       const serverImportPath = `${packageName}/${metadata.server.subpath.slice(2)}`;
@@ -958,8 +958,12 @@ describe('app package import boundaries', () => {
     expect(generatedCatalog).toContain('bundledAppDescriptorByPackageName');
     expect(generatedCatalog).toContain('bundledClientRegistrationByPackageName');
     expect(generatedCatalog).toContain('bundledServerRegistrationByPackageName');
-    expect(serverRegistry).toContain('bundledAppDefinitions');
-    expect(clientRegistry).toContain('bundledAppDefinitions');
+    expect(definitions).toContain('bundledClientRegistrations');
+    expect(definitions).toContain('bundledServerRegistrations');
+    expect(serverRegistry).toContain('bundledServerRegistrations');
+    expect(clientRegistry).toContain('bundledClientRegistrations');
+    expect(serverRegistry).not.toContain('generatedAppCatalog');
+    expect(clientRegistry).not.toContain('generatedAppCatalog');
     for (const assemblyFile of bundledAppAssemblyFiles) {
       expect(source(assemblyFile)).not.toMatch(/(?:\.\.\/apps|src\/apps|packages\/apps)\/(?:chat|chess|snake)\//);
     }

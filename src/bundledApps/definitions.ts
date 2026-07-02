@@ -1,10 +1,21 @@
-import type { AppId, AppManifest, AppPackageDescriptor } from '@citadel/platform/app';
-import { bundledInstalledApps } from './generatedAppCatalog.js';
+import type { AppId, AppManifest, AppPackageDescriptor, InstalledAppCatalogEntry } from '@citadel/platform/app';
+import type { ClientAppRegistration } from '@citadel/platform/client';
+import type { ServerAppRegistration } from '@citadel/platform/server-app';
+import { bundledInstalledApps as generatedBundledInstalledApps } from './generatedAppCatalog.js';
 
 export type BundledAppDefinition = AppPackageDescriptor;
+export type BundledInstalledApp = InstalledAppCatalogEntry;
+
+export const bundledInstalledApps: BundledInstalledApp[] = generatedBundledInstalledApps;
 
 export const bundledAppDefinitions: BundledAppDefinition[] =
   bundledInstalledApps.map((app) => app.descriptor);
+
+export const bundledClientRegistrations: ClientAppRegistration<any>[] =
+  bundledInstalledApps.map((app) => app.clientRegistration);
+
+export const bundledServerRegistrations: ServerAppRegistration<any>[] =
+  bundledInstalledApps.map((app) => app.serverRegistration);
 
 export const bundledAppIds: AppId[] = bundledAppDefinitions.map((definition) => definition.appId);
 

@@ -1,11 +1,10 @@
 import type { AppId, AppManifest } from '@citadel/platform/app';
-import type { ServerAppModule, ServerAppRegistration, ServerAppServices } from '@citadel/platform/server-app';
+import type { ServerAppModule, ServerAppServices } from '@citadel/platform/server-app';
 import {
-  bundledAppDefinitions,
   bundledAppIds,
-  bundledAppManifests
+  bundledAppManifests,
+  bundledServerRegistrations
 } from './catalog.js';
-import { bundledServerRegistrationByPackageName } from './generatedAppCatalog.js';
 
 export type BundledServerAppServices = ServerAppServices & {
   enabledAppIds?: AppId[];
@@ -13,11 +12,7 @@ export type BundledServerAppServices = ServerAppServices & {
 
 export { bundledAppManifests } from './catalog.js';
 
-type BundledServerAppRegistration = ServerAppRegistration<BundledServerAppServices>;
-
-const bundledServerAppDefinitions = bundledAppDefinitions.map((definition) => (
-  bundledServerRegistrationByPackageName[definition.packageName]
-)) satisfies BundledServerAppRegistration[];
+const bundledServerAppDefinitions = bundledServerRegistrations;
 const bundledAppIdSet = new Set<AppId>(bundledAppIds);
 
 export const bundledServerAppBundles = bundledServerAppDefinitions.map((definition) => definition.bundle);
