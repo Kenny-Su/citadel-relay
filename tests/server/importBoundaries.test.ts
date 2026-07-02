@@ -120,6 +120,7 @@ type PackageExportTarget = string | {
 type PackageJson = {
   name: string;
   version: string;
+  private?: boolean;
   files?: string[];
   exports: Record<string, PackageExportTarget>;
   scripts: Record<string, string>;
@@ -686,6 +687,7 @@ describe('app package import boundaries', () => {
       const appPackage = jsonSource<PackageJson>(`${app.packagePath}/package.json`);
 
       expect(appPackage.name).toBe(app.packageName);
+      expect(appPackage.private).toBeUndefined();
       expect(appPackage.files).toEqual(['dist']);
       expect(appPackage.exports).toEqual(
         app.appId === 'chat'
