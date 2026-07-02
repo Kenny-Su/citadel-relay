@@ -24,12 +24,13 @@ Root app-only libraries such as `chess.js` are local source-build bootstrap dev 
 Platform contracts are split by environment inside `packages/platform/src`:
 
 - `appContract.ts`: neutral app metadata such as `AppManifest` and `AppPackageDescriptor`.
+- `installedAppCatalogContract.ts`: generated installed-app catalog entries that pair descriptors with client and server registrations.
 - `clientAppContract.ts`: browser view contracts such as `AppViewProps`, `ClientAppModule`, and `ClientAppRegistration`.
 - `serverAppContract.ts`: server runtime contracts such as `ServerAppContext`, `ServerAppModule`, `ServerAppBundle`, and `ServerAppRegistration`.
 
 Bundled apps import platform APIs through small app-facing facades. These are the package-facing platform exports:
 
-- `@citadel/platform/app`: neutral app metadata, app ids, participants, space helpers, and shared platform payload types.
+- `@citadel/platform/app`: neutral app metadata, installed catalog entry types, app ids, participants, space helpers, and shared platform payload types.
 - `@citadel/platform/client`: browser app contracts.
 - `@citadel/platform/server-app`: server app contracts and shared platform server services.
 - `@citadel/platform/persistence`: persistence APIs intentionally available to app repositories.
