@@ -14,13 +14,13 @@ In development, Vite forwards Socket.IO traffic from the frontend to the backend
 
 ## Platform Concepts
 
-- `appId`: one of `chat`, `chess`, or `snake`
+- `appId`: a string app id known to the installed app catalog
 - `spaceId`: lowercase letters, numbers, and hyphens; invalid values normalize to `general`
 - `participant`: `{ id: string; socketId?: string; name: string }`
 
 `participant.id` is a stable guest id stored by the browser. `socketId` is the current live connection id and can change after reconnect.
 
-Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are normalized by the client into `/apps/chat/spaces/:spaceId`.
+Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are normalized by the client into the first enabled app for that host.
 
 ## Platform Events
 
@@ -30,7 +30,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 
 ```ts
 {
-  appId: "chat" | "chess" | "snake";
+  appId: string;
   spaceId?: string;
   guestId?: string;
   name: string;
@@ -41,7 +41,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 
 ```ts
 {
-  appId: "chat" | "chess" | "snake";
+  appId: string;
   type: string;
   payload?: unknown;
 }
@@ -53,7 +53,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 
 ```ts
 {
-  appId: "chat" | "chess" | "snake";
+  appId: string;
   spaceId: string;
   participants: Participant[];
   appState: unknown;
@@ -66,7 +66,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 {
   id: string;
   type: "participant:joined" | "participant:left";
-  appId: "chat" | "chess" | "snake";
+  appId: string;
   spaceId: string;
   participant: Participant;
   createdAt: string;
@@ -77,7 +77,7 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 
 ```ts
 {
-  appId: "chat" | "chess" | "snake";
+  appId: string;
   type: string;
   payload?: unknown;
 }
@@ -91,7 +91,9 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 }
 ```
 
-## Bundled App Events
+## Installed App Events
+
+The currently bundled app packages define these app-owned events. External apps define their own event names and payloads behind the same platform envelope.
 
 Chat:
 

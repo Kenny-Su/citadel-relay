@@ -346,9 +346,14 @@ describe('app package import boundaries', () => {
       expect(moduleSource).not.toContain('../apps/');
       expect(moduleSource).not.toContain('../../../src/');
     }
+    const protocolDocs = source('docs/communication-protocol.md');
+
     expect(source('packages/platform/src/shared.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
     expect(source('packages/platform/src/server.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
     expect(source('packages/platform/src/appContract.ts')).not.toContain('react');
+    expect(protocolDocs).toContain('a string app id known to the installed app catalog');
+    expect(protocolDocs).not.toContain('"chat" | "chess" | "snake"');
+    expect(protocolDocs).not.toContain('one of `chat`, `chess`, or `snake`');
   });
 
   it('keeps platform contracts split by environment', () => {
