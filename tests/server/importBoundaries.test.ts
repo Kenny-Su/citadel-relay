@@ -378,6 +378,7 @@ describe('app package import boundaries', () => {
       'src/client/appRegistry.tsx',
       'src/server/citadelServer.ts',
       'src/server/chatServer.ts',
+      'src/server/legacyChatServer.ts',
       'src/server/index.ts',
       'src/bundledApps/serverServices.ts'
     ];
@@ -470,6 +471,7 @@ describe('app package import boundaries', () => {
   it('keeps legacy app repository coupling isolated from chat server wiring', () => {
     const citadelServer = source('src/server/citadelServer.ts');
     const chatServer = source('src/server/chatServer.ts');
+    const legacyChatServer = source('src/server/legacyChatServer.ts');
     const serverIndex = source('src/server/index.ts');
     const legacyRepositories = source('src/server/legacyAppRepositories.ts');
     const socketTest = source('tests/server/socket.test.ts');
@@ -482,14 +484,22 @@ describe('app package import boundaries', () => {
     expect(citadelServer).toContain("from '../bundledApps/serverRegistry.js'");
     expect(citadelServer).not.toContain('./legacyAppRepositories');
     expect(citadelServer).not.toMatch(/chatRepository|chessRepository|messageStore|messageRateLimit|CHAT_DB_PATH/);
-    expect(chatServer).toContain("from './citadelServer.js'");
-    expect(chatServer).toContain("from './legacyAppRepositories.js'");
+    expect(chatServer.trim()).toBe("export { createChatServer, type ChatServerOptions } from './legacyChatServer.js';");
+    expect(legacyChatServer).toContain("from './citadelServer.js'");
+    expect(legacyChatServer).toContain("from './legacyAppRepositories.js'");
+    expect(legacyChatServer).toContain('CHAT_DB_PATH');
     expect(chatServer).not.toContain('@citadel/platform/server');
     expect(chatServer).not.toContain('../bundledApps/serverRegistry');
     expect(chatServer).not.toContain('@citadel/app-chat/server');
     expect(chatServer).not.toContain('@citadel/app-chess/server');
     expect(chatServer).not.toMatch(/ChatRepository|ChessRepository|MessageStore/);
     expect(chatServer).not.toMatch(/resolveChatRepository|resolveChessRepository/);
+    expect(legacyChatServer).not.toContain('@citadel/platform/server');
+    expect(legacyChatServer).not.toContain('../bundledApps/serverRegistry');
+    expect(legacyChatServer).not.toContain('@citadel/app-chat/server');
+    expect(legacyChatServer).not.toContain('@citadel/app-chess/server');
+    expect(legacyChatServer).not.toMatch(/ChatRepository|ChessRepository|MessageStore/);
+    expect(legacyChatServer).not.toMatch(/resolveChatRepository|resolveChessRepository/);
     expect(legacyRepositories).toContain('@citadel/app-chat/server');
     expect(legacyRepositories).toContain('@citadel/app-chess/server');
     expect(legacyRepositories).toMatch(/resolveChatRepository|resolveChessRepository/);

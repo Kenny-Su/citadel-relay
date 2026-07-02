@@ -54,7 +54,7 @@ Local package source exists under `packages/` as the current local development s
 Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
 The currently bundled first-party apps are still source-owning package folders in this repo, but they are no longer root npm workspaces. Their implementations live under `packages/apps/<app>/src`, and the host sees them through installed package artifacts in `node_modules`.
 
-Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned server registration. The normal host server factory is `createCitadelServer`; the older `createChatServer` wrapper remains only as a compatibility adapter for legacy repository return fields and test injection.
+Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned server registration. The normal host server factory is `createCitadelServer`; the older `createChatServer` export remains only as a compatibility shim over `legacyChatServer` for legacy repository return fields and test injection.
 
 Neutral app package descriptors expose manifest, package name, app capabilities, and intended client/server registration export names. They are the runtime/public API mirror of the package manifest metadata, and must not import client or server implementation modules directly.
 
@@ -100,7 +100,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - The handwritten bundled app resolver validates configured package names against the generated descriptor map when parser/resolver behavior is tested.
 - The client registry consumes generated client registrations plus neutral shared types.
 - The server registry consumes generated server registrations and calls app-owned server service adapters through that registration contract.
-- The production server entrypoint uses `createCitadelServer`; app-specific legacy repository wiring stays isolated in `createChatServer` and `legacyAppRepositories`.
+- The production server entrypoint uses `createCitadelServer`; app-specific legacy repository wiring stays isolated in `legacyChatServer` and `legacyAppRepositories`, with `chatServer` kept as a thin compatibility export.
 - Neutral app indexes do not import client modules, server bundles, repositories, repository resolvers, or implementation factories.
 - App code imports platform contracts, shared platform helpers, and persistence APIs through `@citadel/platform/*` aliases rather than relative platform, shared, or persistence paths.
 - Registries import bundled app public surfaces through `@citadel/app-*` package aliases rather than relative app entrypoint paths.
