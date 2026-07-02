@@ -108,8 +108,8 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Platform implementation lives in `packages/platform/src`; root `src/platform` compatibility shims are removed.
 - Root shared and persistence compatibility shims are removed.
 - Bundled app assembly lives in `src/bundledApps`; root `src/apps` compatibility shims are removed.
-- App package shell entrypoints stay thin re-export shims to package-local source once each app moves.
-- Package `tsconfig.json` files include only package-local entrypoints and source files. They must not include root host code, tests, or sibling package source by relative path.
+- App and Platform package root source entrypoint shims are removed; public package entrypoints are built `dist` artifacts declared in package `exports`.
+- Package `tsconfig.json` files include only package-local `src` files. They must not include root host code, tests, or sibling package source by relative path.
 - Package build configs emit artifacts into package-local `dist/` directories only. Generated artifacts are inspectable build output, not committed source of truth.
 - App client code must not import server entrypoints, repositories, message stores, or `node:*` modules.
 - App server entrypoints must not import React views or app client modules.

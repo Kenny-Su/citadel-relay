@@ -771,14 +771,14 @@ describe('app package import boundaries', () => {
 
     const platformConfig = jsonSource<PackageTsconfig>('packages/platform/tsconfig.json');
     expect(platformConfig.extends).toBe('../../tsconfig.package-base.json');
-    expect(platformConfig.include).toEqual(['*.ts', 'src/**/*.ts']);
+    expect(platformConfig.include).toEqual(['src/**/*.ts']);
     expect(platformConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
 
     for (const app of firstPartyApps) {
       const appConfig = jsonSource<PackageTsconfig>(`${app.packagePath}/tsconfig.json`);
 
       expect(appConfig.extends).toBe('../../../tsconfig.package-base.json');
-      expect(appConfig.include).toEqual(['*.ts', 'src/**/*.ts', 'src/**/*.tsx']);
+      expect(appConfig.include).toEqual(['src/**/*.ts', 'src/**/*.tsx']);
       expect(appConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
       expect(appConfig.compilerOptions).toBeUndefined();
     }
@@ -845,20 +845,17 @@ describe('app package import boundaries', () => {
     }
   });
 
-  it('keeps workspace package entrypoints as thin source re-export shims', () => {
-    expect(source('packages/platform/app.ts').trim()).toBe("export * from './src/app.js';");
-    expect(source('packages/platform/client.ts').trim()).toBe("export * from './src/client.js';");
-    expect(source('packages/platform/server-app.ts').trim()).toBe("export * from './src/serverApp.js';");
-    expect(source('packages/platform/persistence.ts').trim()).toBe("export * from './src/persistence.js';");
-    expect(source('packages/platform/server.ts').trim()).toBe("export * from './src/server.js';");
-    expect(source('packages/platform/validation.ts').trim()).toBe("export * from './src/validation.js';");
+  it('removes package root source re-export shims', () => {
+    for (const entrypoint of platformEntrypointNames) {
+      expect(exists(`packages/platform/${entrypoint}.ts`)).toBe(false);
+    }
 
     for (const app of firstPartyApps) {
-      expect(source(`${app.packagePath}/index.ts`).trim()).toBe("export * from './src/index.js';");
-      expect(source(`${app.packagePath}/client.ts`).trim()).toBe("export * from './src/client.js';");
-      expect(source(`${app.packagePath}/server.ts`).trim()).toBe("export * from './src/server.js';");
+      expect(exists(`${app.packagePath}/index.ts`)).toBe(false);
+      expect(exists(`${app.packagePath}/client.ts`)).toBe(false);
+      expect(exists(`${app.packagePath}/server.ts`)).toBe(false);
     }
-    expect(source('packages/apps/chat/validation.ts').trim()).toBe("export * from './src/validation.js';");
+    expect(exists('packages/apps/chat/validation.ts')).toBe(false);
   });
 
   it('removes legacy compatibility shim files', () => {
