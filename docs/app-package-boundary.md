@@ -92,7 +92,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - `local-external-apps.json` is optional migration data. When present, it declares local source package names and source paths that should be consumed as packed installed artifacts; external hosts with normally installed app dependencies do not need the file.
 - App `package.json` files declare Citadel metadata, including manifest data and client/server registration subpaths and export names.
 - App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
-- App package manifests are publishable-shaped: they are not marked private, and npm pack includes only `dist` plus `package.json`.
+- Platform and app package manifests are publishable-shaped: they are not marked private, and npm pack includes only `dist` plus `package.json`.
 - Local packed app artifacts are written under ignored `.citadel/app-packs`; they are install inputs for pilots, not committed source.
 - The neutral bundled app config validates the JSON selection data for generation.
 - `src/bundledApps/generatedAppCatalog.ts` is generated from app package manifest metadata and is the only static host bridge to configured app descriptors and client/server registration imports.

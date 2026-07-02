@@ -660,6 +660,7 @@ describe('app package import boundaries', () => {
       expect(rootPackage.workspaces).not.toContain(app.packagePath);
     }
     expect(platformPackage.name).toBe('@citadel/platform');
+    expect(platformPackage.private).toBeUndefined();
     expect(platformPackage.files).toEqual(['dist']);
     expect(platformPackage.exports).toEqual({
       './app': { types: './dist/app.d.ts', import: './dist/app.js' },
