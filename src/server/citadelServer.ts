@@ -8,7 +8,6 @@ export type CitadelServerOptions = Omit<PlatformServerOptions, 'apps' | 'appMani
   databasePath?: string;
   enabledAppIds?: AppId[];
   enabledAppIdsInput?: string;
-  appServices?: Record<string, unknown>;
 };
 
 export function createCitadelServer(options: CitadelServerOptions = {}) {
@@ -24,8 +23,7 @@ export function createCitadelServer(options: CitadelServerOptions = {}) {
       appManifests: filterAppManifests(enabledAppIds),
       apps: createBundledServerApps({
         database,
-        enabledAppIds,
-        appServices: options.appServices
+        enabledAppIds
       })
     }),
     database

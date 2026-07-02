@@ -370,8 +370,7 @@ describe('app package import boundaries', () => {
       'src/bundledApps/catalog.ts',
       'src/client/appRegistry.tsx',
       'src/server/citadelServer.ts',
-      'src/server/index.ts',
-      'src/bundledApps/serverServices.ts'
+      'src/server/index.ts'
     ];
 
     for (const moduleName of platformSourceModuleNames) {
@@ -468,6 +467,8 @@ describe('app package import boundaries', () => {
       /createChatServerAppFromServices|createChessServerAppFromServices|createSnakeServerAppFromServices/
     );
     expect(registry).not.toMatch(/resolveChatRepository|resolveChessRepository|resolveBundledRepositories/);
+    expect(registry).not.toContain('appServices');
+    expect(exists('src/bundledApps/serverServices.ts')).toBe(false);
   });
 
   it('keeps host server wiring generic and free of legacy app repository coupling', () => {
@@ -480,6 +481,7 @@ describe('app package import boundaries', () => {
     expect(serverIndex).not.toContain('../bundledApps/serverRegistry');
     expect(citadelServer).toContain("from '../bundledApps/serverRegistry.js'");
     expect(citadelServer).not.toContain('./legacyAppRepositories');
+    expect(citadelServer).not.toContain('appServices');
     expect(`${serverIndex}\n${citadelServer}`).not.toMatch(
       /createChatServer|legacyAppRepositories|legacyChatServer|chatRepository|chessRepository|messageStore|messageRateLimit|CHAT_DB_PATH/
     );
@@ -510,11 +512,11 @@ describe('app package import boundaries', () => {
     }
   });
 
-  it('keeps shared server services platform-only', () => {
-    const services = source('src/bundledApps/serverServices.ts');
+  it('keeps bundled server service inputs platform-only', () => {
+    const registry = source('src/bundledApps/serverRegistry.ts');
 
-    expect(services).toContain('@citadel/platform/server-app');
-    expect(services).not.toMatch(/AppId|chat|chess|messageStore|Repository|RateLimit|enabledAppIds/);
+    expect(registry).toContain("ServerAppServices } from '@citadel/platform/server-app'");
+    expect(registry).not.toMatch(/chat|chess|messageStore|Repository|RateLimit|appServices/);
   });
 
   it('keeps app server service types scoped to their own app', () => {
@@ -523,6 +525,8 @@ describe('app package import boundaries', () => {
     expect(source(appImplementationPath('snake', 'serverEntry.ts'))).not.toMatch(
       /chat|Chat|chess|Chess|Repository|messageStore/
     );
+    expect(source(appImplementationPath('chat', 'serverEntry.ts'))).not.toContain('appServices');
+    expect(source(appImplementationPath('chess', 'serverEntry.ts'))).not.toContain('appServices');
   });
 
   it('keeps app code on platform facade imports', () => {

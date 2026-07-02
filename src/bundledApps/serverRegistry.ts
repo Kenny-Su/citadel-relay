@@ -1,17 +1,13 @@
 import type { AppId, AppManifest } from '@citadel/platform/app';
-import type { ServerAppModule, ServerAppRegistration } from '@citadel/platform/server-app';
+import type { ServerAppModule, ServerAppRegistration, ServerAppServices } from '@citadel/platform/server-app';
 import {
   bundledAppDefinitions,
   bundledAppIds,
   bundledAppManifests
 } from './catalog.js';
 import { bundledServerRegistrationByPackageName } from './generatedAppCatalog.js';
-import type { ServerAppServices } from './serverServices.js';
-
-export type { ServerAppServices } from './serverServices.js';
 
 export type BundledServerAppServices = ServerAppServices & {
-  appServices?: Record<string, unknown>;
   enabledAppIds?: AppId[];
 };
 

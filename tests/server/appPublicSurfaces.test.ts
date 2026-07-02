@@ -158,15 +158,11 @@ describe('app public package surfaces', () => {
     const apps = [
       publicChatServerRegistration.createServerApp({
         database,
-        appServices: {
-          chatRepository
-        }
+        chatRepository
       }),
       publicChessServerRegistration.createServerApp({
         database,
-        appServices: {
-          chessRepository
-        }
+        chessRepository
       })
     ];
     const context: Omit<ServerAppContext, 'participant' | 'socketId'> = {
