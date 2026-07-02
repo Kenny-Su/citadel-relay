@@ -39,12 +39,12 @@
     }
   },
   "scripts": {
-    "prebuild": "node ../../../scripts/generate-local-app-metadata.mjs --package-dir .",
+    "prebuild": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
     "build": "npm run clean && tsc -p tsconfig.build.json",
-    "prebuild:watch": "node ../../../scripts/generate-local-app-metadata.mjs --package-dir .",
+    "prebuild:watch": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
     "build:watch": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
-    "pretypecheck": "node ../../../scripts/generate-local-app-metadata.mjs --package-dir .",
+    "pretypecheck": "node ../../../packages/platform/dist/generateAppMetadataCli.js --package-dir .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

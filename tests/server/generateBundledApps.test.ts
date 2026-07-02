@@ -478,6 +478,13 @@ describe('bundled app generator package resolution', () => {
     expect(packedFiles).toContain('dist/client.d.ts');
     expect(packedFiles).toContain('dist/server.js');
     expect(packedFiles).toContain('dist/server.d.ts');
+    expect(packedFiles).toContain('dist/appPackageMetadata.js');
+    expect(packedFiles).toContain('dist/appPackageMetadata.d.ts');
+    expect(packedFiles).toContain('dist/generateAppMetadataCli.js');
+    expect(packedFiles).toContain('dist/generateAppMetadataCli.d.ts');
+    expect(JSON.parse(readFileSync(join(process.cwd(), 'packages/platform/package.json'), 'utf8')).bin).toEqual({
+      'citadel-generate-app-metadata': './dist/generateAppMetadataCli.js'
+    });
     expect(packedFiles.some((file) => file.startsWith('src/'))).toBe(false);
     expect(packedFiles.some((file) => file.startsWith('dist/src/'))).toBe(false);
     expect(packedFiles).not.toContain('app.ts');

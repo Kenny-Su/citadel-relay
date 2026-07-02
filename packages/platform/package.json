@@ -5,6 +5,9 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "citadel-generate-app-metadata": "./dist/generateAppMetadataCli.js"
+  },
   "exports": {
     "./app": {
       "types": "./dist/app.d.ts",
