@@ -1,1 +1,1 @@
-export * from './src/serverEntry.js';
+export * from './src/server.js';

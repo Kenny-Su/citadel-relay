@@ -428,6 +428,7 @@ describe('bundled app generator package resolution', () => {
     expect(packedFiles).toContain('dist/server.js');
     expect(packedFiles).toContain('dist/server.d.ts');
     expect(packedFiles.some((file) => file.startsWith('src/'))).toBe(false);
+    expect(packedFiles.some((file) => file.startsWith('dist/src/'))).toBe(false);
     expect(packedFiles).not.toContain('index.ts');
     expect(packedFiles).not.toContain('client.ts');
     expect(packedFiles).not.toContain('server.ts');
@@ -455,6 +456,7 @@ describe('bundled app generator package resolution', () => {
     expect(packedFiles).toContain('dist/server.js');
     expect(packedFiles).toContain('dist/server.d.ts');
     expect(packedFiles.some((file) => file.startsWith('src/'))).toBe(false);
+    expect(packedFiles.some((file) => file.startsWith('dist/src/'))).toBe(false);
     expect(packedFiles).not.toContain('app.ts');
     expect(packedFiles).not.toContain('server.ts');
     expect(packedFiles).not.toContain('tsconfig.json');

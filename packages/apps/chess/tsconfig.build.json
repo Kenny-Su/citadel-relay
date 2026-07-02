@@ -2,7 +2,7 @@
   "extends": "../../../tsconfig.package-build-base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": "src"
   },
-  "include": ["*.ts", "src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

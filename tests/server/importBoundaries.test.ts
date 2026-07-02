@@ -16,7 +16,7 @@ const firstPartyWorkspaceApps = [
       'manifest.ts',
       'messageStore.ts',
       'server.ts',
-      'serverEntry.ts',
+      'serverApp.ts',
       'shared.ts',
       'validation.ts'
     ]
@@ -34,7 +34,7 @@ const firstPartyWorkspaceApps = [
       'manifest.ts',
       'repository.ts',
       'server.ts',
-      'serverEntry.ts',
+      'serverApp.ts',
       'shared.ts'
     ]
   },
@@ -50,7 +50,7 @@ const firstPartyWorkspaceApps = [
       'index.ts',
       'manifest.ts',
       'server.ts',
-      'serverEntry.ts',
+      'serverApp.ts',
       'shared.ts'
     ]
   }
@@ -387,7 +387,7 @@ describe('app package import boundaries', () => {
       expect(source(fileName)).not.toMatch(forbiddenAppStateMachineLogic);
     }
 
-    expect(source(appImplementationPath('snake', 'server.ts'))).toContain('snake:ready');
+    expect(source(appImplementationPath('snake', 'serverApp.ts'))).toContain('snake:ready');
     expect(source(appImplementationPath('snake', 'shared.ts'))).toContain('SnakeStage');
   });
 
@@ -410,7 +410,7 @@ describe('app package import boundaries', () => {
       expect(indexSource).toContain(`export const ${appId}AppPackage`);
       expect(indexSource).toContain("} from './shared.js'");
       expect(indexSource).not.toMatch(/from ['"]\.\/client(?:\.js)?['"]/);
-      expect(indexSource).not.toMatch(/from ['"]\.\/serverEntry(?:\.js)?['"]/);
+      expect(indexSource).not.toContain('./serverEntry');
       expect(indexSource.replace(/(['"])(?:\\.|(?!\1).)*\1/g, '')).not.toMatch(
         /ServerBundle|Repository|messageStore|repository|validation|create[A-Z].*App/
       );
@@ -500,7 +500,7 @@ describe('app package import boundaries', () => {
 
   it('keeps app client code away from server-only surfaces', () => {
     const forbiddenClientImports =
-      /(?:serverEntry|serverAppContract|messageStore|repository|node:fs|node:path|node:sqlite|from ['"]\.\/server(?:\.js)?['"])/;
+      /(?:serverAppContract|messageStore|repository|node:fs|node:path|node:sqlite|from ['"]\.\/server(?:\.js)?['"])/;
 
     for (const appId of firstPartyAppIds) {
       expect(source(appImplementationPath(appId, 'client.tsx'))).not.toMatch(forbiddenClientImports);
@@ -514,7 +514,7 @@ describe('app package import boundaries', () => {
     const forbiddenServerImports = /(?:\.\/client|clientAppContract|ChatView|ChessView|SnakeView|react)/;
 
     for (const appId of firstPartyAppIds) {
-      expect(source(appImplementationPath(appId, 'serverEntry.ts'))).not.toMatch(forbiddenServerImports);
+      expect(source(appImplementationPath(appId, 'server.ts'))).not.toMatch(forbiddenServerImports);
     }
   });
 
@@ -526,13 +526,13 @@ describe('app package import boundaries', () => {
   });
 
   it('keeps app server service types scoped to their own app', () => {
-    expect(source(appImplementationPath('chat', 'serverEntry.ts'))).not.toMatch(/chess|Chess/);
-    expect(source(appImplementationPath('chess', 'serverEntry.ts'))).not.toMatch(/chat|Chat|messageStore/);
-    expect(source(appImplementationPath('snake', 'serverEntry.ts'))).not.toMatch(
+    expect(source(appImplementationPath('chat', 'server.ts'))).not.toMatch(/chess|Chess/);
+    expect(source(appImplementationPath('chess', 'server.ts'))).not.toMatch(/chat|Chat|messageStore/);
+    expect(source(appImplementationPath('snake', 'server.ts'))).not.toMatch(
       /chat|Chat|chess|Chess|Repository|messageStore/
     );
-    expect(source(appImplementationPath('chat', 'serverEntry.ts'))).not.toContain('appServices');
-    expect(source(appImplementationPath('chess', 'serverEntry.ts'))).not.toContain('appServices');
+    expect(source(appImplementationPath('chat', 'server.ts'))).not.toContain('appServices');
+    expect(source(appImplementationPath('chess', 'server.ts'))).not.toContain('appServices');
   });
 
   it('keeps app code on platform facade imports', () => {
@@ -543,8 +543,8 @@ describe('app package import boundaries', () => {
       const manifest = source(appImplementationPath(appId, 'manifest.ts'));
       const client = source(appImplementationPath(appId, 'client.tsx'));
       const view = source(appImplementationPath(appId, firstPartyApp(appId).viewFile));
-      const server = source(appImplementationPath(appId, 'server.ts'));
-      const serverEntry = source(appImplementationPath(appId, 'serverEntry.ts'));
+      const server = source(appImplementationPath(appId, 'serverApp.ts'));
+      const serverEntrypoint = source(appImplementationPath(appId, 'server.ts'));
 
       expect(manifest).toContain('@citadel/platform/app');
       expect(manifest).not.toMatch(forbiddenDeepAppImports);
@@ -557,9 +557,9 @@ describe('app package import boundaries', () => {
       expect(server).toContain('@citadel/platform/');
       expect(server).not.toContain('@citadel/platform/client');
       expect(server).not.toMatch(forbiddenDeepAppImports);
-      expect(serverEntry).toContain('@citadel/platform/server-app');
-      expect(serverEntry).not.toContain('@citadel/platform/client');
-      expect(serverEntry).not.toMatch(forbiddenDeepAppImports);
+      expect(serverEntrypoint).toContain('@citadel/platform/server-app');
+      expect(serverEntrypoint).not.toContain('@citadel/platform/client');
+      expect(serverEntrypoint).not.toMatch(forbiddenDeepAppImports);
     }
   });
 
@@ -672,7 +672,7 @@ describe('app package import boundaries', () => {
     });
     expect(Object.values(platformPackage.exports).every((entry) => typeof entry !== 'string')).toBe(true);
     expect(Object.values(platformPackage.exports).every((entry) => typeof entry !== 'string' && entry.import.startsWith('./dist/'))).toBe(true);
-    expect(platformPackage.scripts.build).toBe('tsc -p tsconfig.build.json');
+    expect(platformPackage.scripts.build).toBe('npm run clean && tsc -p tsconfig.build.json');
     expect(platformPackage.scripts['build:watch']).toBe(
       'tsc -p tsconfig.build.json --watch --preserveWatchOutput'
     );
@@ -707,7 +707,7 @@ describe('app package import boundaries', () => {
       expect(appPackage.citadel).toEqual(expectedCitadelMetadataByAppId[app.appId]);
       expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string')).toBe(true);
       expect(Object.values(appPackage.exports).every((entry) => typeof entry !== 'string' && entry.import.startsWith('./dist/'))).toBe(true);
-      expect(appPackage.scripts.build).toBe('tsc -p tsconfig.build.json');
+      expect(appPackage.scripts.build).toBe('npm run clean && tsc -p tsconfig.build.json');
       expect(appPackage.scripts['build:watch']).toBe(
         'tsc -p tsconfig.build.json --watch --preserveWatchOutput'
       );
@@ -837,10 +837,10 @@ describe('app package import boundaries', () => {
 
       expect(buildConfig.extends).toMatch(/tsconfig\.package-build-base\.json$/);
       if (packagePath === 'packages/platform') {
-        expect(buildConfig.compilerOptions).toEqual({ outDir: 'dist', rootDir: '.' });
+        expect(buildConfig.compilerOptions).toEqual({ outDir: 'dist', rootDir: 'src' });
       } else {
         expect(buildConfig.compilerOptions?.outDir).toBe('dist');
-        expect(buildConfig.compilerOptions?.rootDir).toBe('.');
+        expect(buildConfig.compilerOptions?.rootDir).toBe('src');
         expect(buildConfig.compilerOptions).not.toHaveProperty('paths');
       }
       expect(buildConfig.include?.join(' ')).not.toMatch(/\.\.|tests|packages\//);
@@ -858,7 +858,7 @@ describe('app package import boundaries', () => {
     for (const app of firstPartyWorkspaceApps) {
       expect(source(`${app.packagePath}/index.ts`).trim()).toBe("export * from './src/index.js';");
       expect(source(`${app.packagePath}/client.ts`).trim()).toBe("export * from './src/client.js';");
-      expect(source(`${app.packagePath}/server.ts`).trim()).toBe("export * from './src/serverEntry.js';");
+      expect(source(`${app.packagePath}/server.ts`).trim()).toBe("export * from './src/server.js';");
     }
     expect(source('packages/apps/chat/validation.ts').trim()).toBe("export * from './src/validation.js';");
   });
