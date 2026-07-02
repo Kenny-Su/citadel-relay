@@ -511,13 +511,14 @@ describe('bundled app generator package resolution', () => {
     const cacheDir = join(tempDir, 'npm-cache');
     const installedAppDir = join(tempDir, 'node_modules', ...packageName.split('/'));
     const previousCache = process.env.CITADEL_PACK_NPM_CACHE;
+    let installResult: ReturnType<typeof installPackedLocalPackage>;
 
     mkdirSync(dirname(installedAppDir), { recursive: true });
     symlinkSync(join(process.cwd(), sourcePath), installedAppDir, 'dir');
 
     try {
       process.env.CITADEL_PACK_NPM_CACHE = cacheDir;
-      installPackedLocalPackage({
+      installResult = installPackedLocalPackage({
         packageName,
         installRootDir: tempDir,
         destinationDir: join(tempDir, 'packs'),
@@ -533,8 +534,17 @@ describe('bundled app generator package resolution', () => {
     }
 
     expect(lstatSync(installedAppDir).isSymbolicLink()).toBe(false);
-    expect(readdirSync(installedAppDir).sort()).toEqual(['dist', 'package.json']);
+    expect(readdirSync(installedAppDir).sort()).toEqual(
+      appId === 'snake' ? ['dist', 'package.json'] : ['dist', 'node_modules', 'package.json']
+    );
     expect(JSON.parse(readFileSync(join(installedAppDir, 'package.json'), 'utf8')).citadel.appId).toBe(appId);
+    expect(installResult!.installedDependencyDirs.map((dependencyDir: string) => dependencyDir.slice(installedAppDir.length + 1)).sort()).toEqual(
+      appId === 'chat'
+        ? ['node_modules/nanoid']
+        : appId === 'chess'
+          ? ['node_modules/chess.js', 'node_modules/nanoid']
+          : []
+    );
   });
 
   it('generates bundled app registries from a packed snake dependency install', async () => {

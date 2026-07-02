@@ -628,10 +628,9 @@ describe('app package import boundaries', () => {
       expect(packageLock.packages[`node_modules/${packageName}`]).toBeUndefined();
       expect(packageLock.packages[sourcePath]).toBeUndefined();
       expect(lstatSync(join(process.cwd(), 'node_modules', ...packageName.split('/'))).isSymbolicLink()).toBe(false);
-      expect(readdirSync(join(process.cwd(), 'node_modules', ...packageName.split('/'))).sort()).toEqual([
-        'dist',
-        'package.json'
-      ]);
+      expect(readdirSync(join(process.cwd(), 'node_modules', ...packageName.split('/'))).sort()).toEqual(
+        app.appId === 'snake' ? ['dist', 'package.json'] : ['dist', 'node_modules', 'package.json']
+      );
     }
     expect(packageLock.packages[''].dependencies?.['@citadel/platform']).toBe(platformPackage.version);
     expect(packageLock.packages['node_modules/@citadel/platform']).toMatchObject({
@@ -817,6 +816,8 @@ describe('app package import boundaries', () => {
     expect(packLocalPackage).toContain("['run', 'build', '-w', '@citadel/platform']");
     expect(packLocalPackage).not.toContain("['run', 'build', '-w', packageName]");
     expect(installPackedLocalPackage).toContain("join(installRootDir, 'node_modules'");
+    expect(installPackedLocalPackage).toContain('installLocalRuntimeDependencies');
+    expect(installPackedLocalPackage).toContain("!dependencyName.startsWith('@citadel/')");
     expect(installPackedLocalPackage).toContain("execFileSync('tar'");
     expect(installPackedLocalPackage).toContain("'--strip-components=1'");
     expect(installLocalExternalApps).toContain('readLocalExternalAppsConfig');

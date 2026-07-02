@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packLocalPackage } from './pack-local-package.mjs';
@@ -92,6 +92,55 @@ export function installedPackageDir(packageName, installRootDir = rootDir) {
   return join(installRootDir, 'node_modules', ...packageName.split('/'));
 }
 
+function packageNodeModulesDir(packageName, installRootDir = rootDir) {
+  validatePackageName(packageName);
+
+  return join(installRootDir, 'node_modules', ...packageName.split('/'));
+}
+
+function readPackageJson(packageDir) {
+  return JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+}
+
+function localRuntimeDependencyNames(packageJson) {
+  return Object.keys(packageJson.dependencies ?? {})
+    .filter((dependencyName) => !dependencyName.startsWith('@citadel/'));
+}
+
+function installLocalRuntimeDependencies(packageDir, dependencyRootDir) {
+  const packageJson = readPackageJson(packageDir);
+  const dependencyNames = localRuntimeDependencyNames(packageJson);
+
+  if (dependencyNames.length === 0) {
+    return [];
+  }
+
+  const packageNodeModules = join(packageDir, 'node_modules');
+  const installedDependencyDirs = [];
+
+  mkdirSync(packageNodeModules, { recursive: true });
+
+  for (const dependencyName of dependencyNames) {
+    const sourceDir = packageNodeModulesDir(dependencyName, dependencyRootDir);
+    const targetDir = join(packageNodeModules, ...dependencyName.split('/'));
+
+    if (!existsSync(sourceDir)) {
+      throw new Error(`Local dependency ${dependencyName} for ${packageJson.name} is not installed at ${sourceDir}`);
+    }
+
+    rmSync(targetDir, { recursive: true, force: true });
+    mkdirSync(dirname(targetDir), { recursive: true });
+    cpSync(sourceDir, targetDir, {
+      recursive: true,
+      dereference: true,
+      filter: (source) => !source.includes(`${sourceDir}/node_modules/.cache`)
+    });
+    installedDependencyDirs.push(targetDir);
+  }
+
+  return installedDependencyDirs;
+}
+
 export function installPackedLocalPackage(options) {
   const {
     packageName,
@@ -111,6 +160,7 @@ export function installPackedLocalPackage(options) {
     quiet
   });
   const packageDir = installedPackageDir(packageName, installRootDir);
+  const dependencyRootDir = sourceRootDir ?? rootDir;
 
   rmSync(packageDir, { recursive: true, force: true });
   mkdirSync(packageDir, { recursive: true });
@@ -127,11 +177,13 @@ export function installPackedLocalPackage(options) {
   if (!existsSync(join(packageDir, 'package.json'))) {
     throw new Error(`Packed app install for ${packageName} did not produce package.json`);
   }
+  const installedDependencyDirs = installLocalRuntimeDependencies(packageDir, dependencyRootDir);
 
   return {
     ...packResult,
     installRootDir,
-    installedPackageDir: packageDir
+    installedPackageDir: packageDir,
+    installedDependencyDirs
   };
 }
 
