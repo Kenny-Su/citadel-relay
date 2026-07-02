@@ -1,5 +1,4 @@
-import type { AppPackageDescriptor } from '@citadel/platform/app';
-import { chatManifest } from './manifest.js';
+import { generatedAppPackage } from './generatedMetadata.js';
 
 export { chatManifest } from './manifest.js';
 export {
@@ -15,16 +14,4 @@ export type {
   TypingUpdatePayload
 } from './shared.js';
 
-export const chatAppPackage = {
-  appId: chatManifest.appId,
-  manifest: chatManifest,
-  packageName: '@citadel/app-chat',
-  client: {
-    subpath: './client',
-    registrationExport: 'chatClientRegistration'
-  },
-  server: {
-    subpath: './server',
-    registrationExport: 'chatServerRegistration'
-  }
-} satisfies AppPackageDescriptor;
+export const chatAppPackage = generatedAppPackage;

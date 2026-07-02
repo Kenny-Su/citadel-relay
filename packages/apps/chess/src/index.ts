@@ -1,5 +1,4 @@
-import type { AppPackageDescriptor } from '@citadel/platform/app';
-import { chessManifest } from './manifest.js';
+import { generatedAppPackage } from './generatedMetadata.js';
 
 export { chessManifest } from './manifest.js';
 export type {
@@ -9,16 +8,4 @@ export type {
   ChessState
 } from './shared.js';
 
-export const chessAppPackage = {
-  appId: chessManifest.appId,
-  manifest: chessManifest,
-  packageName: '@citadel/app-chess',
-  client: {
-    subpath: './client',
-    registrationExport: 'chessClientRegistration'
-  },
-  server: {
-    subpath: './server',
-    registrationExport: 'chessServerRegistration'
-  }
-} satisfies AppPackageDescriptor;
+export const chessAppPackage = generatedAppPackage;
