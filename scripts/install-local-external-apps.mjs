@@ -3,7 +3,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { installPackedLocalPackage } from './install-packed-local-package.mjs';
 import {
-  defaultLocalExternalAppsConfigPath as configPath,
   normalizeLocalExternalAppEntry,
   readLocalExternalAppsConfig
 } from './local-external-apps.mjs';
@@ -84,7 +83,8 @@ export function buildLocalExternalAppPackages(packageEntries, options = {}) {
 export function installLocalExternalApps(options = {}) {
   const installRootDir = options.rootDir ?? rootDir;
   const sourceRootDir = options.sourceRootDir ?? rootDir;
-  const config = readLocalExternalAppsConfig(options.configPath ?? configPath);
+  const selectedConfigPath = options.configPath ?? join(installRootDir, 'local-external-apps.json');
+  const config = readLocalExternalAppsConfig(selectedConfigPath, { optional: !options.configPath });
   const quiet = options.quiet ?? false;
 
   buildLocalExternalAppPackages(config.packages, {
@@ -96,7 +96,7 @@ export function installLocalExternalApps(options = {}) {
 
   return config.packages.map((app) => (options.installPackedApp ?? installPackedLocalPackage)({
     packageName: app.packageName,
-    configPath: options.configPath ?? configPath,
+    configPath: selectedConfigPath,
     installRootDir,
     destinationDir: options.destinationDir,
     sourceRootDir,

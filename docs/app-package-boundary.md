@@ -89,7 +89,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Platform core imports only platform contracts and generic server modules. It must not import concrete app internals.
 - `bundled-apps.json` declares installed app package names only.
 - Every package named in `bundled-apps.json` must be installed before catalog generation. Production/external hosts should do that with normal package dependencies; this repo's first-party pilots do it through `local-external-apps.json`.
-- `local-external-apps.json` declares local source package names and source paths that should be consumed as packed installed artifacts during the migration; external dependencies do not need to appear there.
+- `local-external-apps.json` is optional migration data. When present, it declares local source package names and source paths that should be consumed as packed installed artifacts; external hosts with normally installed app dependencies do not need the file.
 - App `package.json` files declare Citadel metadata, including manifest data and client/server registration subpaths and export names.
 - App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
 - Local packed app artifacts are written under ignored `.citadel/app-packs`; they are install inputs for pilots, not committed source.

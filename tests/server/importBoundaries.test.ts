@@ -796,6 +796,8 @@ describe('app package import boundaries', () => {
     expect(localExternalAppHelpers).toContain('local-external-apps.json');
     expect(localExternalAppHelpers).toContain('sourcePath');
     expect(localExternalAppHelpers).toContain('validatePackageName');
+    expect(localExternalAppHelpers).toContain('packages: []');
+    expect(installLocalExternalApps).toContain("join(installRootDir, 'local-external-apps.json')");
     expect(packLocalPackage).toContain('.citadel/app-packs');
     expect(packLocalPackage).toContain('.citadel/npm-cache');
     expect(packLocalPackage).toContain("'pack'");

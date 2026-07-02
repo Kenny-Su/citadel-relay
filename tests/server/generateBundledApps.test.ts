@@ -646,6 +646,34 @@ describe('bundled app generator package resolution', () => {
     expect(installOptions.every((options) => options.skipBuild)).toBe(true);
   });
 
+  it('treats local external app config as optional host migration data', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
+    const buildCommands: string[][] = [];
+    const installOptions: unknown[] = [];
+
+    expect(installLocalExternalApps({
+      rootDir: tempDir,
+      quiet: true,
+      runNpmCommand(args: string[]) {
+        buildCommands.push(args);
+      },
+      installPackedApp(options: unknown) {
+        installOptions.push(options);
+        return options;
+      }
+    })).toEqual([]);
+    expect(buildCommands).toEqual([]);
+    expect(installOptions).toEqual([]);
+
+    const missingConfigPath = join(tempDir, 'missing-local-external-apps.json');
+
+    expect(() => installLocalExternalApps({
+      rootDir: tempDir,
+      configPath: missingConfigPath,
+      quiet: true
+    })).toThrow(`local-external-apps.json not found at ${missingConfigPath}`);
+  });
+
   it('boots a snake-only host catalog from a packed external dependency', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
     const cacheDir = join(tempDir, 'npm-cache');

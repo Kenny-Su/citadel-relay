@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validatePackageName } from './generate-bundled-apps.mjs';
@@ -8,6 +8,7 @@ const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const defaultLocalExternalAppsConfigPath = process.env.CITADEL_LOCAL_EXTERNAL_APPS_CONFIG
   ? resolve(process.env.CITADEL_LOCAL_EXTERNAL_APPS_CONFIG)
   : join(rootDir, 'local-external-apps.json');
+const hasExplicitLocalExternalAppsConfigPath = Boolean(process.env.CITADEL_LOCAL_EXTERNAL_APPS_CONFIG);
 
 function validateSourcePath(packageName, sourcePath) {
   if (typeof sourcePath !== 'string' || sourcePath.length === 0) {
@@ -44,7 +45,17 @@ export function normalizeLocalExternalAppEntry(entry) {
   };
 }
 
-export function readLocalExternalAppsConfig(path = defaultLocalExternalAppsConfigPath) {
+export function readLocalExternalAppsConfig(path = defaultLocalExternalAppsConfigPath, options = {}) {
+  if (!existsSync(path)) {
+    if (options.optional || (path === defaultLocalExternalAppsConfigPath && !hasExplicitLocalExternalAppsConfigPath)) {
+      return {
+        packages: []
+      };
+    }
+
+    throw new Error(`local-external-apps.json not found at ${path}`);
+  }
+
   const config = JSON.parse(readFileSync(path, 'utf8'));
 
   if (!config || typeof config !== 'object' || !Array.isArray(config.packages)) {
