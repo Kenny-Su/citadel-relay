@@ -6,6 +6,8 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error The generator is a Node ESM script exercised directly by Vitest.
 import { generateInstalledAppCatalog, resolveAppPackages, resolveInstalledPackageJsonPath, runGenerator, validatePackageName } from '../../scripts/generate-bundled-apps.mjs';
+// @ts-expect-error The local external app installer is a Node ESM script exercised directly by Vitest.
+import { installLocalExternalApps } from '../../scripts/install-local-external-apps.mjs';
 // @ts-expect-error The installer is a Node ESM script exercised directly by Vitest.
 import { installPackedWorkspaceApp } from '../../scripts/install-packed-workspace-app.mjs';
 
@@ -475,6 +477,99 @@ describe('bundled app generator package resolution', () => {
     expect(generatedCatalog).toContain(
       "import { snakeServerRegistration as bundledServerRegistration0 } from '@citadel/app-snake/server';"
     );
+  });
+
+  it('builds local external apps once before installing packed artifacts', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
+    const configPath = join(tempDir, 'local-external-apps.json');
+    const buildCommands: string[][] = [];
+    const installOptions: Array<{
+      packageName: string;
+      installRootDir: string;
+      skipBuild: boolean;
+      quiet: boolean;
+    }> = [];
+
+    writeFileSync(configPath, JSON.stringify({
+      packages: [
+        '@citadel/app-chat',
+        '@citadel/app-snake'
+      ]
+    }, null, 2));
+
+    const results = installLocalExternalApps({
+      rootDir: tempDir,
+      configPath,
+      quiet: true,
+      runNpmCommand(args: string[]) {
+        buildCommands.push(args);
+      },
+      installPackedApp(options: {
+        packageName: string;
+        installRootDir: string;
+        skipBuild: boolean;
+        quiet: boolean;
+      }) {
+        installOptions.push(options);
+
+        return {
+          packageName: options.packageName,
+          installedPackageDir: join(options.installRootDir, 'node_modules', ...options.packageName.split('/'))
+        };
+      }
+    });
+
+    expect(buildCommands).toEqual([
+      ['run', 'build', '-w', '@citadel/platform'],
+      ['run', 'build', '-w', '@citadel/app-chat'],
+      ['run', 'build', '-w', '@citadel/app-snake']
+    ]);
+    expect(installOptions).toEqual([
+      expect.objectContaining({
+        packageName: '@citadel/app-chat',
+        installRootDir: tempDir,
+        skipBuild: true,
+        quiet: true
+      }),
+      expect.objectContaining({
+        packageName: '@citadel/app-snake',
+        installRootDir: tempDir,
+        skipBuild: true,
+        quiet: true
+      })
+    ]);
+    expect(results.map((result: { packageName: string }) => result.packageName)).toEqual([
+      '@citadel/app-chat',
+      '@citadel/app-snake'
+    ]);
+
+    buildCommands.length = 0;
+    installOptions.length = 0;
+    installLocalExternalApps({
+      rootDir: tempDir,
+      configPath,
+      quiet: true,
+      skipPlatformBuild: true,
+      runNpmCommand(args: string[]) {
+        buildCommands.push(args);
+      },
+      installPackedApp(options: {
+        packageName: string;
+        installRootDir: string;
+        skipBuild: boolean;
+        quiet: boolean;
+      }) {
+        installOptions.push(options);
+
+        return options;
+      }
+    });
+
+    expect(buildCommands).toEqual([
+      ['run', 'build', '-w', '@citadel/app-chat'],
+      ['run', 'build', '-w', '@citadel/app-snake']
+    ]);
+    expect(installOptions.every((options) => options.skipBuild)).toBe(true);
   });
 
   it('boots a snake-only host catalog from a packed external dependency', async () => {

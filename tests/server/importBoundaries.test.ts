@@ -645,7 +645,9 @@ describe('app package import boundaries', () => {
     );
     expect(rootPackage.scripts['build:platform']).toBe('npm run build -w @citadel/platform');
     expect(rootPackage.scripts['build:workspace-apps']).toBe('node scripts/run-workspace-apps.mjs build');
-    expect(rootPackage.scripts['install:local-external-apps']).toBe('node scripts/install-local-external-apps.mjs');
+    expect(rootPackage.scripts['install:local-external-apps']).toBe(
+      'node scripts/install-local-external-apps.mjs --skip-platform-build'
+    );
     expect(rootPackage.scripts['pack:workspace-app']).toBe('node scripts/pack-workspace-app.mjs');
     expect(rootPackage.scripts['pack:app-snake']).toBe(
       'node scripts/pack-workspace-app.mjs @citadel/app-snake'
@@ -794,6 +796,10 @@ describe('app package import boundaries', () => {
     expect(installPackedWorkspaceApp).toContain("'--strip-components=1'");
     expect(installLocalExternalApps).toContain('local-external-apps.json');
     expect(installLocalExternalApps).toContain('installPackedWorkspaceApp');
+    expect(installLocalExternalApps).toContain('--skip-platform-build');
+    expect(installLocalExternalApps).toContain("['run', 'build', '-w', '@citadel/platform']");
+    expect(installLocalExternalApps).toContain("['run', 'build', '-w', packageName]");
+    expect(installLocalExternalApps).toContain('skipBuild: true');
     expect(packageBuildBase.extends).toBe('./tsconfig.package-base.json');
     expect(packageBuildBase.compilerOptions).toMatchObject({
       declaration: true,

@@ -28,7 +28,7 @@
     "build:packages": "npm run build:platform && npm run build:workspace-apps && npm run install:local-external-apps",
     "build:platform": "npm run build -w @citadel/platform",
     "build:workspace-apps": "node scripts/run-workspace-apps.mjs build",
-    "install:local-external-apps": "node scripts/install-local-external-apps.mjs",
+    "install:local-external-apps": "node scripts/install-local-external-apps.mjs --skip-platform-build",
     "pack:workspace-app": "node scripts/pack-workspace-app.mjs",
     "pack:app-snake": "node scripts/pack-workspace-app.mjs @citadel/app-snake",
     "clean:packages": "npm run clean -w @citadel/platform && npm run clean:workspace-apps",
