@@ -40,7 +40,7 @@ export function createChatServer(options: ChatServerOptions | string = {}) {
       appManifests,
       apps: createBundledServerApps({
         ...services,
-        appServices: createLegacyAppServiceBag(repositories, legacyOptions)
+        appServices: createLegacyAppServiceBag(repositories, legacyOptions, services.enabledAppIds)
       })
     }),
     database,
