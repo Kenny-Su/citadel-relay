@@ -10,7 +10,7 @@ npm run dev
 ```
 
 The Vite client runs at `http://localhost:5173` and the Socket.IO/Express backend runs at `http://localhost:3001`.
-`npm run dev` builds the Platform package, regenerates the installed app catalog, then watches the Platform package while the server and client run.
+`npm run dev` regenerates the installed app catalog, then runs the server and client.
 This repo is empty by default: apps are normal installed package dependencies selected by `bundled-apps.json`.
 
 ## Test And Build
@@ -31,6 +31,7 @@ This host starts with no apps installed. Adding apps does not require host code 
 
 - Host owners: see [Adding Apps](docs/adding-apps.md).
 - App authors: see [Developing Apps](docs/developing-apps.md).
+- Platform maintainers: see [Developing The Platform](docs/developing-platform.md).
 - Package contract details: see [App Package Boundary](docs/app-package-boundary.md).
 
 ## Production Run

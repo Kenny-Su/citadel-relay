@@ -3,22 +3,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const platformEntrypointNames = ['app', 'client', 'persistence', 'server', 'server-app', 'validation'] as const;
-const platformSourceModuleNames = [
-  'app',
-  'appContract',
-  'appPackageMetadata',
-  'client',
-  'clientAppContract',
-  'installedAppCatalogContract',
-  'persistence',
-  'server',
-  'serverApp',
-  'serverAppContract',
-  'shared',
-  'sqlite',
-  'validation',
-  'version'
-] as const;
 
 type PackageExportTarget = string | {
   types?: string;
@@ -65,6 +49,10 @@ function exists(path: string) {
   return existsSync(join(process.cwd(), path));
 }
 
+function installedPackageJson(packageName: string) {
+  return jsonSource<PackageJson>(join('node_modules', ...packageName.split('/'), 'package.json'));
+}
+
 function packageExportEntries(packageJson: Pick<PackageJson, 'exports'>) {
   return Object.entries(packageJson.exports).map(([subpath, target]) => ({
     subpath,
@@ -99,33 +87,11 @@ const publicRuntimeExports = {
 } as const satisfies Record<string, readonly string[]>;
 
 describe('app package import boundaries', () => {
-  it('keeps platform core free of concrete apps and root compatibility imports', () => {
-    for (const moduleName of platformSourceModuleNames) {
-      const moduleSource = source(`packages/platform/src/${moduleName}.ts`);
-
-      expect(moduleSource).not.toContain('../apps/');
-      expect(moduleSource).not.toContain('../../../src/');
-      expect(moduleSource).not.toMatch(/@citadel\/app-(?:chat|chess|snake)/);
-    }
-
-    expect(source('packages/platform/src/shared.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
-    expect(source('packages/platform/src/server.ts')).not.toMatch(/'chat'|'chess'|'snake'/);
-    expect(source('packages/platform/src/appContract.ts')).not.toContain('react');
+  it('keeps platform source out of the host repo', () => {
+    expect(exists('packages/platform')).toBe(false);
+    expect(exists('tsconfig.package-base.json')).toBe(false);
+    expect(exists('tsconfig.package-build-base.json')).toBe(false);
     expect(source('docs/communication-protocol.md')).toContain('a string app id known to the installed app catalog');
-  });
-
-  it('keeps platform contracts split by environment', () => {
-    expect(source('packages/platform/src/appContract.ts')).not.toMatch(
-      /clientAppContract|serverAppContract|ComponentType/
-    );
-    expect(source('packages/platform/src/installedAppCatalogContract.ts')).toContain('ClientAppRegistration');
-    expect(source('packages/platform/src/installedAppCatalogContract.ts')).toContain('ServerAppRegistration');
-    expect(source('packages/platform/src/installedAppCatalogContract.ts')).not.toMatch(/from 'react'|ComponentType/);
-    expect(source('packages/platform/src/clientAppContract.ts')).toContain("from 'react'");
-    expect(source('packages/platform/src/clientAppContract.ts')).not.toContain('serverAppContract');
-    expect(source('packages/platform/src/serverAppContract.ts')).not.toMatch(
-      /clientAppContract|react|ComponentType/
-    );
   });
 
   it('removes platform-local app source and local external app migration tooling', () => {
@@ -137,15 +103,19 @@ describe('app package import boundaries', () => {
     expect(exists('scripts/local-external-apps.mjs')).toBe(false);
   });
 
-  it('keeps the host empty by default and platform as the only workspace', () => {
+  it('keeps the host empty by default and platform as an installed dependency', () => {
     const rootPackage = jsonSource<PackageJson>('package.json');
-    const platformPackage = jsonSource<PackageJson>('packages/platform/package.json');
+    const platformPackage = installedPackageJson('@citadel-platform/platform');
 
-    expect(rootPackage.workspaces).toEqual(['packages/platform']);
+    expect(rootPackage.workspaces).toBeUndefined();
     expect(rootPackage.dependencies?.['@citadel-platform/platform']).toBe(platformPackage.version);
     expect(Object.keys(rootPackage.dependencies ?? {}).filter((name) => name.startsWith('@citadel-platform/app-'))).toEqual([]);
-    expect(rootPackage.scripts?.['build:packages']).toBe('npm run build:platform');
-    expect(rootPackage.scripts?.['test:packages']).toBe('npm run test -w @citadel-platform/platform');
+    expect(rootPackage.scripts).not.toHaveProperty('build:packages');
+    expect(rootPackage.scripts).not.toHaveProperty('build:platform');
+    expect(rootPackage.scripts).not.toHaveProperty('clean:packages');
+    expect(rootPackage.scripts).not.toHaveProperty('dev:packages');
+    expect(rootPackage.scripts).not.toHaveProperty('test:packages');
+    expect(rootPackage.scripts).not.toHaveProperty('typecheck:packages');
     expect(rootPackage.scripts).not.toHaveProperty('install:local-external-apps');
     expect(rootPackage.scripts).not.toHaveProperty('pack:local-package');
   });
@@ -171,7 +141,7 @@ describe('app package import boundaries', () => {
     const forbiddenPackageExportPattern =
       /(?:^\.(?:\/src|\/dist\/src)(?:\/|$)|(?:View|repository|messageStore|manifest|shared)\.(?:js|ts|tsx)$|(?:^|\/)(?:ChatView|ChessView|SnakeView|repository|messageStore|manifest|shared)(?:$|\/))/;
     const packageJsons = [
-      jsonSource<PackageJson>('packages/platform/package.json')
+      installedPackageJson('@citadel-platform/platform')
     ];
 
     for (const packageJson of packageJsons) {

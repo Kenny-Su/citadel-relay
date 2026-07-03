@@ -2,7 +2,7 @@
 
 Citadel apps live in separate package repositories. The host wires selected installed app packages through a generated catalog, so new apps can be built and released without changing host or platform source.
 
-For task-oriented guides, see [Adding Apps](adding-apps.md) for host owners and [Developing Apps](developing-apps.md) for app authors.
+For task-oriented guides, see [Adding Apps](adding-apps.md) for host owners, [Developing Apps](developing-apps.md) for app authors, and [Developing The Platform](developing-platform.md) for platform maintainers.
 
 ## Installed App Contract
 
@@ -83,7 +83,7 @@ Apps import platform APIs through package-facing exports:
 - `@citadel-platform/platform/server`: host server runtime.
 - `@citadel-platform/platform/validation`: platform validation helpers.
 
-The platform package artifact includes only `dist` plus `package.json`. It remains the only workspace package in this host repo.
+The platform package artifact includes only `dist` plus `package.json`. The platform source lives in its own repository and this host consumes it as the published `@citadel-platform/platform` package.
 
 ## App Repo Starter Shape
 
