@@ -37,14 +37,19 @@ describe.skipIf(!hasBuiltClient)('production server', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('serves health, app routes, and legacy room routes from one server', async () => {
+  it('serves health, app routes, and legacy room routes from one empty host server', async () => {
     const health = await fetch(`${url}/health`);
-    await expect(health.json()).resolves.toMatchObject({ ok: true, version: '0.1.0' });
+    await expect(health.json()).resolves.toMatchObject({
+      ok: true,
+      version: '0.1.0',
+      apps: [],
+      appCount: 0,
+      appManifests: []
+    });
 
     for (const path of [
-      '/apps/chat/spaces/general',
-      '/apps/chess/spaces/general',
-      '/apps/snake/spaces/general',
+      '/',
+      '/apps/fixture/spaces/general',
       '/rooms/general'
     ]) {
       const route = await fetch(`${url}${path}`);

@@ -52,6 +52,10 @@ function parseRoute(): RouteState {
 }
 
 function getSpacePath(appId: AppId, spaceId: string) {
+  if (!appId) {
+    return '/';
+  }
+
   return `/apps/${appId}/spaces/${spaceId}`;
 }
 
@@ -71,6 +75,14 @@ function syncSpacePath(route: RouteState, mode: 'push' | 'replace' = 'push') {
 
 function normalizeRouteForApps(route: RouteState, apps: ClientAppModule<any>[]): RouteState {
   const fallbackApp = apps[0];
+
+  if (!fallbackApp) {
+    return {
+      appId: '',
+      spaceId: route.spaceId || DEFAULT_SPACE_ID
+    };
+  }
+
   const fallbackAppId = fallbackApp?.appId ?? '';
 
   if (apps.some((app) => app.appId === route.appId)) {
@@ -211,6 +223,7 @@ export function App() {
 
   const visibleApps = availableApps ?? [];
   const currentApp = visibleApps.find((app) => app.appId === route.appId) ?? visibleApps[0] ?? clientApps[0];
+  const hasCurrentApp = Boolean(currentApp);
   const currentParticipant = participants.find((participant) => participant.id === guestId) ?? {
     id: guestId,
     socketId: socket.id,
@@ -343,7 +356,7 @@ export function App() {
       return;
     }
 
-    if (!joinedName) {
+    if (!currentApp || !joinedName) {
       return;
     }
 
@@ -358,7 +371,7 @@ export function App() {
       name: joinedName,
       spaceId: route.spaceId
     });
-  }, [availableApps, connected, guestId, joinedName, route.appId, route.spaceId]);
+  }, [availableApps, connected, currentApp, guestId, joinedName, route.appId, route.spaceId]);
 
   function joinSpace(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -390,7 +403,7 @@ export function App() {
   function switchSpace(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextRoute = {
-      appId: route.appId,
+      appId: currentApp?.appId ?? route.appId,
       spaceId: normalizeSpaceId(spaceDraft)
     };
 
@@ -419,6 +432,10 @@ export function App() {
   }
 
   async function copySpaceLink() {
+    if (!currentApp) {
+      return;
+    }
+
     try {
       await copyText(getSpaceUrl(route.appId, route.spaceId));
       setNotice('Space link copied.');
@@ -428,6 +445,10 @@ export function App() {
   }
 
   function sendAppEvent(type: string, payload?: unknown) {
+    if (!currentApp) {
+      return;
+    }
+
     socket.emit('app:event', {
       appId: route.appId,
       type,
@@ -435,55 +456,64 @@ export function App() {
     });
   }
 
-  const AppView = currentApp.View as React.ComponentType<any>;
+  const AppView = currentApp?.View as React.ComponentType<any> | undefined;
 
   return (
     <main className="app-shell">
-      <section className="workspace-panel" aria-label={`${currentApp.label} space`}>
+      <section className="workspace-panel" aria-label={currentApp ? `${currentApp.label} space` : 'Citadel host'}>
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Citadel Platform</p>
-            <h1>{currentApp.label}</h1>
+            <p className="eyebrow">Citadel Host</p>
+            <h1>{currentApp?.label ?? 'No apps installed'}</h1>
             <p className="space-label">#{route.spaceId}</p>
           </div>
           <div className="header-actions">
-            <nav className="app-tabs" aria-label="Apps">
-              {visibleApps.map((app) => (
-                <button
-                  className={app.appId === route.appId ? 'active' : ''}
-                  key={app.appId}
-                  type="button"
-                  onClick={() => switchApp(app.appId)}
-                >
-                  {app.label}
+            {hasCurrentApp ? (
+              <>
+                <nav className="app-tabs" aria-label="Apps">
+                  {visibleApps.map((app) => (
+                    <button
+                      className={app.appId === route.appId ? 'active' : ''}
+                      key={app.appId}
+                      type="button"
+                      onClick={() => switchApp(app.appId)}
+                    >
+                      {app.label}
+                    </button>
+                  ))}
+                </nav>
+                <form className="space-switcher" onSubmit={switchSpace}>
+                  <label className="sr-only" htmlFor="spaceName">
+                    Space name
+                  </label>
+                  <input
+                    id="spaceName"
+                    value={spaceDraft}
+                    maxLength={32}
+                    onChange={(event) => setSpaceDraft(event.target.value)}
+                    placeholder="general"
+                  />
+                  <button type="submit">Go</button>
+                </form>
+                <button className="copy-link-button" type="button" onClick={copySpaceLink}>
+                  Copy link
                 </button>
-              ))}
-            </nav>
-            <form className="space-switcher" onSubmit={switchSpace}>
-              <label className="sr-only" htmlFor="spaceName">
-                Space name
-              </label>
-              <input
-                id="spaceName"
-                value={spaceDraft}
-                maxLength={32}
-                onChange={(event) => setSpaceDraft(event.target.value)}
-                placeholder="general"
-              />
-              <button type="submit">Go</button>
-            </form>
-            <button className="copy-link-button" type="button" onClick={copySpaceLink}>
-              Copy link
-            </button>
-            <div className={connected ? 'status online' : 'status'}>
-              <span aria-hidden="true" />
-              {connected ? 'Online' : 'Offline'}
-            </div>
+                <div className={connected ? 'status online' : 'status'}>
+                  <span aria-hidden="true" />
+                  {connected ? 'Online' : 'Offline'}
+                </div>
+              </>
+            ) : null}
           </div>
         </header>
 
         {!availableApps ? (
           <div className="empty-state">Loading apps...</div>
+        ) : !currentApp || !AppView ? (
+          <div className="empty-state empty-host-state">
+            <strong>No apps installed.</strong>
+            <span>Install an app package, add it to bundled-apps.json, then regenerate the app catalog.</span>
+          </div>
         ) : !joinedName ? (
           <form className="join-card" onSubmit={joinSpace}>
             <label htmlFor="displayName">Choose a display name</label>

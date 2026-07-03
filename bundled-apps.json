@@ -1,7 +1,3 @@
 {
-  "packages": [
-    "@citadel-platform/app-chat",
-    "@citadel-platform/app-chess",
-    "@citadel-platform/app-snake"
-  ]
+  "packages": []
 }

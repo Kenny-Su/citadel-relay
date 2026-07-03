@@ -1,6 +1,6 @@
 # App Package Boundary
 
-Citadel apps live in separate package repositories. The platform shell wires selected installed app packages through a generated catalog, so new apps can be built and released without changing platform source.
+Citadel apps live in separate package repositories. The host wires selected installed app packages through a generated catalog, so new apps can be built and released without changing host or platform source.
 
 ## Installed App Contract
 
@@ -57,7 +57,7 @@ The package root descriptor must mirror `package.json#citadel`. App repos should
 
 ## Host Integration
 
-The platform host selects apps by installed package name in `bundled-apps.json`. Every package named there must already resolve from `node_modules`.
+The platform host selects apps by installed package name in `bundled-apps.json`. Every package named there must already resolve from `node_modules`. The default host in this repo has no apps installed and uses an empty package list.
 
 To add an app to a host:
 
@@ -109,4 +109,4 @@ Apps own their domain behavior. Stages and rules such as lobbies, readiness, tur
 
 ## Current Defaults
 
-App ids are open strings validated by syntax in the platform and by installed catalog membership in the host. Apps share one SQLite database by default, and each app owns its own tables or live state. Adding or changing apps is install-time composition: install packages, regenerate the catalog, and rebuild the host. Runtime plugin loading is out of scope for this phase.
+App ids are open strings validated by syntax in the platform and by installed catalog membership in the host. The checked-in host starts with `bundled-apps.json` set to an empty package list. Apps share one SQLite database by default when installed, and each app owns its own tables or live state. Adding or changing apps is install-time composition: install packages, regenerate the catalog, and rebuild the host. Runtime plugin loading is out of scope for this phase.

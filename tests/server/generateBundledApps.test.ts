@@ -99,6 +99,7 @@ function sourceFrom(rootDir: string, path: string) {
 
 async function runGeneratorForPackages(rootDir: string, packages: string[]) {
   const configPath = join(rootDir, 'bundled-apps.json');
+  mkdirSync(rootDir, { recursive: true });
   writeFileSync(configPath, JSON.stringify({ packages }, null, 2));
 
   for (const output of generatorOutputs(rootDir)) {
@@ -282,27 +283,61 @@ describe('bundled app catalog generator', () => {
     })).rejects.toThrow('src/bundledApps/generatedAppCatalog.ts is stale. Run npm run generate:bundled-apps.');
   });
 
-  it('generates a catalog from the currently installed first-party app packages', async () => {
-    const hostDir = join(tempDir, 'host');
-    mkdirSync(join(hostDir, 'node_modules/@citadel-platform'), { recursive: true });
+  it('generates an empty catalog for an empty host', async () => {
+    const hostDir = join(tempDir, 'empty-host');
 
-    for (const packageName of ['@citadel-platform/app-chat', '@citadel-platform/app-chess', '@citadel-platform/app-snake']) {
-      symlinkSync(
-        join(process.cwd(), 'node_modules', ...packageName.split('/')),
-        join(hostDir, 'node_modules', ...packageName.split('/'))
-      );
-    }
-
-    await runGeneratorForPackages(hostDir, ['@citadel-platform/app-chat', '@citadel-platform/app-chess', '@citadel-platform/app-snake']);
+    await runGeneratorForPackages(hostDir, []);
 
     const generatedCatalog = sourceFrom(hostDir, 'src/bundledApps/generatedAppCatalog.ts');
 
-    expect(generatedCatalog).toContain("import { chatClientRegistration as bundledClientRegistration0 } from '@citadel-platform/app-chat/client';");
-    expect(generatedCatalog).toContain("import { chessServerRegistration as bundledServerRegistration1 } from '@citadel-platform/app-chess/server';");
-    expect(generatedCatalog).toContain("import { snakeServerRegistration as bundledServerRegistration2 } from '@citadel-platform/app-snake/server';");
-    expect(generatedCatalog).toContain('packageName: "@citadel-platform/app-chat"');
-    expect(generatedCatalog).toContain('packageName: "@citadel-platform/app-chess"');
-    expect(generatedCatalog).toContain('packageName: "@citadel-platform/app-snake"');
+    expect(generatedCatalog).toContain("import type { InstalledAppCatalogEntry } from '@citadel-platform/platform/app';");
+    expect(generatedCatalog).toContain('export const bundledInstalledApps = [');
+    expect(generatedCatalog).not.toContain('AppPackageDescriptor');
+    expect(generatedCatalog).not.toContain('import {');
     expect(existsSync(join(hostDir, 'src/bundledApps/generatedAppCatalog.ts'))).toBe(true);
+  });
+
+  it('generates a catalog from generic installed app packages', async () => {
+    const hostDir = join(tempDir, 'host');
+    const alphaMetadata = {
+      ...validCitadelMetadata,
+      appId: 'alpha',
+      label: 'Alpha',
+      client: {
+        subpath: './client',
+        registrationExport: 'alphaClientRegistration'
+      },
+      server: {
+        subpath: './server',
+        registrationExport: 'alphaServerRegistration'
+      }
+    };
+    const betaMetadata = {
+      ...validCitadelMetadata,
+      appId: 'beta',
+      label: 'Beta',
+      persistence: 'none' as const,
+      client: {
+        subpath: './client',
+        registrationExport: 'betaClientRegistration'
+      },
+      server: {
+        subpath: './server',
+        registrationExport: 'betaServerRegistration'
+      }
+    };
+
+    writeRuntimePackage(hostDir, '@example/app-alpha', { metadata: alphaMetadata });
+    writeRuntimePackage(hostDir, '@example/app-beta', { metadata: betaMetadata });
+    await runGeneratorForPackages(hostDir, ['@example/app-alpha', '@example/app-beta']);
+
+    const generatedCatalog = sourceFrom(hostDir, 'src/bundledApps/generatedAppCatalog.ts');
+
+    expect(generatedCatalog).toContain("import { alphaClientRegistration as bundledClientRegistration0 } from '@example/app-alpha/client';");
+    expect(generatedCatalog).toContain("import { betaServerRegistration as bundledServerRegistration1 } from '@example/app-beta/server';");
+    expect(generatedCatalog).toContain('packageName: "@example/app-alpha"');
+    expect(generatedCatalog).toContain('packageName: "@example/app-beta"');
+    expect(generatedCatalog).toContain('appId: "alpha"');
+    expect(generatedCatalog).toContain('appId: "beta"');
   });
 });

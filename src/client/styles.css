@@ -248,6 +248,20 @@ textarea:focus {
   margin: auto;
 }
 
+.empty-host-state {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  max-width: 480px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-host-state strong {
+  color: #1f2a24;
+  font-size: 1.1rem;
+}
+
 .muted {
   color: #65726b;
   font-size: 0.9rem;

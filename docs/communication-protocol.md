@@ -20,7 +20,7 @@ In development, Vite forwards Socket.IO traffic from the frontend to the backend
 
 `participant.id` is a stable guest id stored by the browser. `socketId` is the current live connection id and can change after reconnect.
 
-Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are normalized by the client into the first enabled app for that host.
+Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are normalized by the client into the first enabled app for that host. If no apps are installed, the host renders its empty state instead.
 
 ## Platform Events
 
@@ -91,11 +91,11 @@ Routes use `/apps/:appId/spaces/:spaceId`. Legacy `/rooms/:spaceId` links are no
 }
 ```
 
-## Installed App Events
+## App-Owned Events
 
-The currently bundled app packages define these app-owned events. External apps define their own event names and payloads behind the same platform envelope.
+Installed apps define their own event names and payloads behind the shared platform envelope. The default host has no app-owned events until packages are installed.
 
-Chat:
+For example, the optional Chat app package uses:
 
 - client `chat:message:send` with `{ body: string }`
 - client `chat:typing:start`
@@ -106,7 +106,7 @@ Chat:
 
 Chat history is persisted in app-owned `chat_messages` rows.
 
-Chess:
+The optional Chess app package uses:
 
 - client `chess:move` with `{ from: string; to: string; promotion?: string }`
 - server `chess:state`
@@ -114,7 +114,7 @@ Chess:
 
 Chess games and moves are persisted by space, so stable guest ids preserve white/black ownership across reconnects.
 
-Snake:
+The optional Snake app package uses:
 
 - client `snake:ready` with optional `{ ready: boolean }`
 - client `snake:direction` with `{ direction: "up" | "down" | "left" | "right" }`
@@ -128,5 +128,4 @@ Snake state is live-only in this version. Snake starts in an app-owned waiting s
 - Display names must be 24 characters or fewer.
 - Space IDs can use lowercase letters, numbers, and hyphens.
 - Space IDs must be 32 characters or fewer.
-- Chat messages cannot be empty.
-- Chat messages must be 500 characters or fewer.
+- App event payload validation is app-owned.

@@ -2,12 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const bundledAppPackages = [
-  '@citadel-platform/app-chat',
-  '@citadel-platform/app-chess',
-  '@citadel-platform/app-snake'
-] as const;
-
 const platformEntrypointNames = ['app', 'client', 'persistence', 'server', 'server-app', 'validation'] as const;
 const platformSourceModuleNames = [
   'app',
@@ -71,10 +65,6 @@ function exists(path: string) {
   return existsSync(join(process.cwd(), path));
 }
 
-function installedPackageJson(packageName: string) {
-  return jsonSource<PackageJson>(join('node_modules', ...packageName.split('/'), 'package.json'));
-}
-
 function packageExportEntries(packageJson: Pick<PackageJson, 'exports'>) {
   return Object.entries(packageJson.exports).map(([subpath, target]) => ({
     subpath,
@@ -105,34 +95,7 @@ const publicRuntimeExports = {
   '@citadel-platform/platform/server-app': [],
   '@citadel-platform/platform/persistence': ['openCitadelDatabase'],
   '@citadel-platform/platform/server': ['createPlatformServer'],
-  '@citadel-platform/platform/validation': ['validateDisplayName'],
-  '@citadel-platform/app-chat': ['MESSAGE_HISTORY_LIMIT', 'MESSAGE_MAX_LENGTH', 'chatAppPackage', 'chatManifest'],
-  '@citadel-platform/app-chat/client': ['chatClientApp', 'chatClientRegistration'],
-  '@citadel-platform/app-chat/server': [
-    'chatServerBundle',
-    'chatServerRegistration',
-    'createChatServerAppFromServices',
-    'createChatRepository',
-    'createSqliteMessageStore',
-    'resolveChatRepository'
-  ],
-  '@citadel-platform/app-chat/validation': ['validateMessageBody'],
-  '@citadel-platform/app-chess': ['chessAppPackage', 'chessManifest'],
-  '@citadel-platform/app-chess/client': ['chessClientApp', 'chessClientRegistration'],
-  '@citadel-platform/app-chess/server': [
-    'chessServerBundle',
-    'chessServerRegistration',
-    'createChessRepository',
-    'createChessServerAppFromServices',
-    'resolveChessRepository'
-  ],
-  '@citadel-platform/app-snake': ['snakeAppPackage', 'snakeManifest'],
-  '@citadel-platform/app-snake/client': ['snakeClientApp', 'snakeClientRegistration'],
-  '@citadel-platform/app-snake/server': [
-    'createSnakeServerAppFromServices',
-    'snakeServerBundle',
-    'snakeServerRegistration'
-  ]
+  '@citadel-platform/platform/validation': ['validateDisplayName']
 } as const satisfies Record<string, readonly string[]>;
 
 describe('app package import boundaries', () => {
@@ -174,15 +137,13 @@ describe('app package import boundaries', () => {
     expect(exists('scripts/local-external-apps.mjs')).toBe(false);
   });
 
-  it('declares apps as installed host dependencies and keeps platform as the only workspace', () => {
+  it('keeps the host empty by default and platform as the only workspace', () => {
     const rootPackage = jsonSource<PackageJson>('package.json');
     const platformPackage = jsonSource<PackageJson>('packages/platform/package.json');
 
     expect(rootPackage.workspaces).toEqual(['packages/platform']);
     expect(rootPackage.dependencies?.['@citadel-platform/platform']).toBe(platformPackage.version);
-    for (const packageName of bundledAppPackages) {
-      expect(rootPackage.dependencies?.[packageName]).toBe(installedPackageJson(packageName).version);
-    }
+    expect(Object.keys(rootPackage.dependencies ?? {}).filter((name) => name.startsWith('@citadel-platform/app-'))).toEqual([]);
     expect(rootPackage.scripts?.['build:packages']).toBe('npm run build:platform');
     expect(rootPackage.scripts?.['test:packages']).toBe('npm run test -w @citadel-platform/platform');
     expect(rootPackage.scripts).not.toHaveProperty('install:local-external-apps');
@@ -196,38 +157,21 @@ describe('app package import boundaries', () => {
     const serverRegistry = source('src/bundledApps/serverRegistry.ts');
     const clientRegistry = source('src/client/appRegistry.tsx');
 
-    expect(bundledApps.packages).toEqual([...bundledAppPackages]);
+    expect(bundledApps.packages).toEqual([]);
     expect(definitions).toContain("from './generatedAppCatalog.js'");
     expect(serverRegistry).toContain("from './catalog.js'");
     expect(clientRegistry).toContain("from '../bundledApps/catalog'");
     expect(serverRegistry).not.toContain('generatedAppCatalog');
     expect(clientRegistry).not.toContain('generatedAppCatalog');
-
-    for (const packageName of bundledApps.packages) {
-      const metadata = installedPackageJson(packageName).citadel;
-
-      if (!metadata) {
-        throw new Error(`${packageName} must declare citadel metadata`);
-      }
-
-      expect(generatedCatalog).toContain(`packageName: "${packageName}"`);
-      expect(generatedCatalog).toContain(`appId: "${metadata.appId}"`);
-      expect(generatedCatalog).toContain(`from '${packageName}/${metadata.client.subpath.slice(2)}'`);
-      expect(generatedCatalog).toContain(`from '${packageName}/${metadata.server.subpath.slice(2)}'`);
-      expect(generatedCatalog).toContain(metadata.client.registrationExport);
-      expect(generatedCatalog).toContain(metadata.server.registrationExport);
-      expect(definitions).not.toContain(`from '${packageName}'`);
-      expect(serverRegistry).not.toContain(`${packageName}/client`);
-      expect(clientRegistry).not.toContain(`${packageName}/server`);
-    }
+    expect(generatedCatalog).toContain('export const bundledInstalledApps = [');
+    expect(generatedCatalog).not.toMatch(/@citadel-platform\/app-/);
   });
 
-  it('does not expose package subpaths for source, view, or implementation internals', () => {
+  it('does not expose platform package subpaths for source or implementation internals', () => {
     const forbiddenPackageExportPattern =
       /(?:^\.(?:\/src|\/dist\/src)(?:\/|$)|(?:View|repository|messageStore|manifest|shared)\.(?:js|ts|tsx)$|(?:^|\/)(?:ChatView|ChessView|SnakeView|repository|messageStore|manifest|shared)(?:$|\/))/;
     const packageJsons = [
-      jsonSource<PackageJson>('packages/platform/package.json'),
-      ...bundledAppPackages.map((packageName) => installedPackageJson(packageName))
+      jsonSource<PackageJson>('packages/platform/package.json')
     ];
 
     for (const packageJson of packageJsons) {
