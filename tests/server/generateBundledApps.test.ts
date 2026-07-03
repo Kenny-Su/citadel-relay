@@ -103,6 +103,10 @@ function sourceFrom(rootDir: string, path: string) {
   return readFileSync(join(rootDir, path), 'utf8');
 }
 
+function localNodeModuleDependency(packageName: string) {
+  return `file:${join(process.cwd(), 'node_modules', ...packageName.split('/'))}`;
+}
+
 async function runGeneratorForPackages(rootDir: string, packages: string[]) {
   const configPath = join(rootDir, 'bundled-apps.json');
   writeFileSync(configPath, JSON.stringify({ packages }, null, 2));
@@ -150,6 +154,31 @@ type PackedLocalPackageName = keyof typeof packedLocalPackageSources;
 type PackedAppPackageName = keyof typeof packedAppSources;
 
 const packedAppPackageNames = Object.keys(packedAppSources) as PackedAppPackageName[];
+const externalSourcePackageFixtures = [
+  {
+    appId: 'chat',
+    packageName: '@citadel/app-chat',
+    sourcePath: 'packages/apps/chat',
+    runtimeDependencies: ['nanoid']
+  },
+  {
+    appId: 'chess',
+    packageName: '@citadel/app-chess',
+    sourcePath: 'packages/apps/chess',
+    runtimeDependencies: ['chess.js', 'nanoid']
+  },
+  {
+    appId: 'snake',
+    packageName: '@citadel/app-snake',
+    sourcePath: 'packages/apps/snake',
+    runtimeDependencies: []
+  }
+] as const satisfies Array<{
+  appId: string;
+  packageName: PackedAppPackageName;
+  sourcePath: string;
+  runtimeDependencies: readonly string[];
+}>;
 
 function runNpm(args: string[], options: { cacheDir: string }) {
   return execFileSync('npm', args, {
@@ -497,54 +526,62 @@ describe('bundled app generator package resolution', () => {
     expect(packedFiles).not.toContain('tsconfig.build.json');
   });
 
-  it('builds snake from a standalone external app source package with packed platform tooling', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
-    const cacheDir = join(tempDir, 'npm-cache');
-    const externalAppDir = join(tempDir, 'external-snake-app');
-    const platformTarballPath = packApp('@citadel/platform', {
-      cacheDir,
-      destinationDir: join(tempDir, 'packs')
-    }).tarballPath;
-    const packageJson = JSON.parse(
-      readFileSync(join(process.cwd(), 'packages/apps/snake/package.json'), 'utf8')
-    ) as {
-      dependencies: Record<string, string>;
-      devDependencies: Record<string, string>;
-    };
+  it.each(externalSourcePackageFixtures)(
+    'builds $appId from a standalone external app source package with packed platform tooling',
+    ({ appId, packageName, sourcePath, runtimeDependencies }) => {
+      tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
+      const cacheDir = join(tempDir, 'npm-cache');
+      const externalAppDir = join(tempDir, `external-${appId}-app`);
+      const platformTarballPath = packApp('@citadel/platform', {
+        cacheDir,
+        destinationDir: join(tempDir, 'packs')
+      }).tarballPath;
+      const packageJson = JSON.parse(
+        readFileSync(join(process.cwd(), sourcePath, 'package.json'), 'utf8')
+      ) as {
+        dependencies: Record<string, string>;
+        devDependencies: Record<string, string>;
+      };
 
-    mkdirSync(externalAppDir, { recursive: true });
-    cpSync(join(process.cwd(), 'packages/apps/snake/src'), join(externalAppDir, 'src'), { recursive: true });
-    cpSync(join(process.cwd(), 'packages/apps/snake/tsconfig.json'), join(externalAppDir, 'tsconfig.json'));
-    cpSync(join(process.cwd(), 'packages/apps/snake/tsconfig.build.json'), join(externalAppDir, 'tsconfig.build.json'));
+      mkdirSync(externalAppDir, { recursive: true });
+      cpSync(join(process.cwd(), sourcePath, 'src'), join(externalAppDir, 'src'), { recursive: true });
+      cpSync(join(process.cwd(), sourcePath, 'tsconfig.json'), join(externalAppDir, 'tsconfig.json'));
+      cpSync(join(process.cwd(), sourcePath, 'tsconfig.build.json'), join(externalAppDir, 'tsconfig.build.json'));
 
-    packageJson.dependencies = {
-      ...packageJson.dependencies,
-      '@citadel/platform': `file:${platformTarballPath}`,
-      express: `file:${join(process.cwd(), 'node_modules/express')}`,
-      nanoid: `file:${join(process.cwd(), 'node_modules/nanoid')}`,
-      'socket.io': `file:${join(process.cwd(), 'node_modules/socket.io')}`
-    };
-    packageJson.devDependencies = {
-      ...packageJson.devDependencies,
-      '@types/node': `file:${join(process.cwd(), 'node_modules/@types/node')}`,
-      '@types/react': `file:${join(process.cwd(), 'node_modules/@types/react')}`,
-      react: `file:${join(process.cwd(), 'node_modules/react')}`,
-      typescript: `file:${join(process.cwd(), 'node_modules/typescript')}`
-    };
-    writeFileSync(join(externalAppDir, 'package.json'), JSON.stringify(packageJson, null, 2));
+      packageJson.dependencies = {
+        ...packageJson.dependencies,
+        '@citadel/platform': `file:${platformTarballPath}`,
+        ...Object.fromEntries(runtimeDependencies.map((dependencyName) => [
+          dependencyName,
+          localNodeModuleDependency(dependencyName)
+        ])),
+        express: localNodeModuleDependency('express'),
+        nanoid: localNodeModuleDependency('nanoid'),
+        'socket.io': localNodeModuleDependency('socket.io')
+      };
+      packageJson.devDependencies = {
+        ...packageJson.devDependencies,
+        '@types/node': localNodeModuleDependency('@types/node'),
+        '@types/react': localNodeModuleDependency('@types/react'),
+        react: localNodeModuleDependency('react'),
+        typescript: localNodeModuleDependency('typescript')
+      };
+      writeFileSync(join(externalAppDir, 'package.json'), JSON.stringify(packageJson, null, 2));
 
-    runNpm(['install', '--ignore-scripts', '--offline', '--prefix', externalAppDir], { cacheDir });
-    expect(existsSync(join(externalAppDir, 'node_modules/.bin/citadel-generate-app-metadata'))).toBe(true);
+      runNpm(['install', '--ignore-scripts', '--offline', '--prefix', externalAppDir], { cacheDir });
+      expect(existsSync(join(externalAppDir, 'node_modules/.bin/citadel-generate-app-metadata'))).toBe(true);
 
-    runNpm(['run', 'build', '--prefix', externalAppDir], { cacheDir });
+      runNpm(['run', 'build', '--prefix', externalAppDir], { cacheDir });
 
-    expect(sourceFrom(externalAppDir, 'src/generatedMetadata.ts')).toContain(
-      '// Generated by citadel-generate-app-metadata from package.json#citadel.'
-    );
-    expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('index.js');
-    expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('client.js');
-    expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('server.js');
-  });
+      expect(sourceFrom(externalAppDir, 'src/generatedMetadata.ts')).toContain(
+        '// Generated by citadel-generate-app-metadata from package.json#citadel.'
+      );
+      expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('index.js');
+      expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('client.js');
+      expect(readdirSync(join(externalAppDir, 'dist')).sort()).toContain('server.js');
+      expect(sourceFrom(externalAppDir, 'package.json')).toContain(packageName);
+    }
+  );
 
   it.each([
     {
