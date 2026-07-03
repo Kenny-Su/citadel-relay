@@ -47,7 +47,7 @@ Local package source exists under `packages/` as the current local development s
 
 - `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, `./persistence`, `./server`, and `./validation`.
 - `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
-- Each local package has a package-local no-emit TypeScript check. These checks prove package isolation without producing JavaScript or declarations.
+- Each local package has a package-local no-emit TypeScript check. These checks prove package isolation without producing JavaScript or declarations. App-owned repository and validation tests live with the package source that owns that behavior; host tests cover installed package integration, generated catalog behavior, and public boundary rules.
 - Each local package also has a local package build that emits JavaScript and declarations into its ignored `dist/` directory. Package `exports` point at those built artifacts, and the host consumes packages through package resolution rather than source aliases.
 - App source packages carry standalone TypeScript configs and authoring-time dev dependencies. External app repos should be able to install `@citadel/platform`, run `citadel-generate-app-metadata`, and build without inheriting this monorepo's root `tsconfig` or root dev dependencies.
 - Platform and app package artifacts are built-package artifacts: npm pack allowlists `dist` plus `package.json`, so source files and TypeScript build configs are development inputs rather than external dependency contents.
@@ -104,7 +104,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Handwritten client and server registries consume ordered descriptor and registration lists from `src/bundledApps/catalog.ts`; only the catalog facade reaches into generated installed-app data.
 - The client registry consumes catalog-provided client registrations plus neutral shared types.
 - The server registry consumes catalog-provided server registrations and calls app-owned server service adapters through that registration contract.
-- The production server entrypoint uses `createCitadelServer`; app-specific repository wiring belongs to app server entrypoints and focused tests, not host server compatibility wrappers.
+- The production server entrypoint uses `createCitadelServer`; app-specific repository wiring belongs to app server entrypoints and app package tests, not host server compatibility wrappers.
 - Neutral app indexes do not import client modules, server bundles, repositories, repository resolvers, or implementation factories.
 - App code imports platform contracts, shared platform helpers, and persistence APIs through `@citadel/platform/*` aliases rather than relative platform, shared, or persistence paths.
 - Registries import bundled app public surfaces through `@citadel/app-*` package aliases rather than relative app entrypoint paths.
@@ -119,7 +119,7 @@ Package exports map each public surface to built JavaScript and declarations, fo
 - Server-side code must not import `clientAppContract`, and client-side code must not import `serverAppContract`.
 - Shared server service contracts must not mention concrete app repositories, enabled-app config, or app-specific options.
 
-Focused repository tests may still import server package surfaces directly. Runtime wiring should use host and package public entrypoints, not removed compatibility paths.
+Host tests should not own app repository, store, or validation internals. Those checks belong in app package test suites, while host tests use package public surfaces only for installed-package integration and boundary verification.
 
 ## Current Defaults
 

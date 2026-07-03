@@ -564,7 +564,8 @@ describe('bundled app generator package resolution', () => {
         '@types/node': localNodeModuleDependency('@types/node'),
         '@types/react': localNodeModuleDependency('@types/react'),
         react: localNodeModuleDependency('react'),
-        typescript: localNodeModuleDependency('typescript')
+        typescript: localNodeModuleDependency('typescript'),
+        vitest: localNodeModuleDependency('vitest')
       };
       writeFileSync(join(externalAppDir, 'package.json'), JSON.stringify(packageJson, null, 2));
 

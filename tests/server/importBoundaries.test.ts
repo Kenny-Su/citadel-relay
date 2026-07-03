@@ -661,7 +661,10 @@ describe('app package import boundaries', () => {
     expect(rootPackage.scripts['dev:client']).toBe('vite --host 0.0.0.0');
     expect(rootPackage.scripts.prestart).toBe('npm run build:packages && npm run generate:bundled-apps');
     expect(rootPackage.scripts.pretest).toBe('npm run build:packages && npm run generate:bundled-apps');
-    expect(rootPackage.scripts.test).toBe('npm run check:bundled-apps && vitest run');
+    expect(rootPackage.scripts.test).toBe('npm run check:bundled-apps && npm run test:packages && vitest run');
+    expect(rootPackage.scripts['test:packages']).toBe(
+      'npm run test -w @citadel/platform && npm run test --prefix packages/apps/chat && npm run test --prefix packages/apps/chess'
+    );
     expect(rootPackage.scripts.build).toBe(
       'npm run build:packages && npm run generate:bundled-apps && npm run typecheck && npm run build:client'
     );
@@ -698,10 +701,14 @@ describe('app package import boundaries', () => {
     );
     expect(platformPackage.scripts.clean).toBe("node -e \"fs.rmSync('dist', { recursive: true, force: true })\"");
     expect(platformPackage.scripts.typecheck).toBe('tsc -p tsconfig.json --noEmit');
+    expect(platformPackage.scripts.test).toBe('vitest run tests');
     expect(platformPackage.dependencies).toEqual({
       express: '^5.1.0',
       nanoid: '^5.1.5',
       'socket.io': '^4.8.1'
+    });
+    expect(platformPackage.devDependencies).toEqual({
+      vitest: '^4.1.9'
     });
 
     for (const app of firstPartyApps) {
@@ -736,12 +743,18 @@ describe('app package import boundaries', () => {
       expect(appPackage.scripts.clean).toBe("node -e \"fs.rmSync('dist', { recursive: true, force: true })\"");
       expect(appPackage.scripts.pretypecheck).toBe('citadel-generate-app-metadata --package-dir .');
       expect(appPackage.scripts.typecheck).toBe('tsc -p tsconfig.json --noEmit');
+      if (app.appId === 'chat' || app.appId === 'chess') {
+        expect(appPackage.scripts.test).toBe('vitest run tests');
+      } else {
+        expect(appPackage.scripts).not.toHaveProperty('test');
+      }
       expect(appPackage.dependencies?.['@citadel/platform']).toBe('0.1.0');
       expect(appPackage.devDependencies).toMatchObject({
         '@types/node': '^24.0.4',
         '@types/react': '^19.1.8',
         react: '^19.1.0',
-        typescript: '^6.0.3'
+        typescript: '^6.0.3',
+        ...(app.appId === 'chat' || app.appId === 'chess' ? { vitest: '^4.1.9' } : {})
       });
     }
   });
@@ -919,6 +932,14 @@ describe('app package import boundaries', () => {
     for (const fileName of deletedCompatibilityPaths) {
       expect(exists(fileName)).toBe(false);
     }
+
+    expect(exists('tests/server/messageStore.test.ts')).toBe(false);
+    expect(exists('tests/server/validation.test.ts')).toBe(false);
+    expect(exists('tests/server/chessRepository.test.ts')).toBe(false);
+    expect(exists('packages/platform/tests/validation.test.ts')).toBe(true);
+    expect(exists('packages/apps/chat/tests/messageStore.test.ts')).toBe(true);
+    expect(exists('packages/apps/chat/tests/validation.test.ts')).toBe(true);
+    expect(exists('packages/apps/chess/tests/repository.test.ts')).toBe(true);
   });
 
   it('keeps bundled app assembly on public app package surfaces', () => {

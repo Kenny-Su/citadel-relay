@@ -31,7 +31,8 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "typecheck:packages": "npm run typecheck -w @citadel/platform",
     "pretest": "npm run build:packages && npm run generate:bundled-apps",
-    "test": "npm run check:bundled-apps && vitest run",
+    "test": "npm run check:bundled-apps && npm run test:packages && vitest run",
+    "test:packages": "npm run test -w @citadel/platform && npm run test --prefix packages/apps/chat && npm run test --prefix packages/apps/chess",
     "test:production": "npm run build && vitest run tests/server/production.test.ts",
     "test:watch": "vitest"
   },

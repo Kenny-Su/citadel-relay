@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
-import { createChessRepository, type ChessRepository } from '@citadel/app-chess/server';
+import { createChessRepository, type ChessRepository } from '../src/repository.js';
 
 describe('chess repository', () => {
   let tempDir: string;
