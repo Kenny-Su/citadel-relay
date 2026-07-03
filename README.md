@@ -27,37 +27,11 @@ Generated root and package `dist/` directories are build output and are not comm
 
 ## Apps
 
-To add apps, install their packages and list the package names in `bundled-apps.json`:
+This host starts with no apps installed. Adding apps does not require host code changes: install app packages, list them in `bundled-apps.json`, regenerate the catalog, and rebuild.
 
-```bash
-npm install @citadel-platform/app-chat @citadel-platform/app-chess @citadel-platform/app-snake
-```
-
-```json
-{
-  "packages": [
-    "@citadel-platform/app-chat",
-    "@citadel-platform/app-chess",
-    "@citadel-platform/app-snake",
-    "@example/citadel-app"
-  ]
-}
-```
-
-Then run:
-
-```bash
-npm install
-npm run generate:bundled-apps
-```
-
-An app package must depend on `@citadel-platform/platform`, declare `package.json#citadel` metadata, and export:
-
-- `.` for the neutral app descriptor, manifest, and shared types.
-- `./client` for a `ClientAppRegistration`.
-- `./server` for a `ServerAppRegistration`.
-
-The recommended app repo shape is `src/index.ts`, `src/client.tsx`, `src/server.ts`, optional app-owned shared modules and tests, and package scripts for `build`, `typecheck`, and `test`. Use `citadel-generate-app-metadata --package-dir .` in `prebuild` and `pretypecheck` so runtime metadata stays mirrored from `package.json#citadel`.
+- Host owners: see [Adding Apps](docs/adding-apps.md).
+- App authors: see [Developing Apps](docs/developing-apps.md).
+- Package contract details: see [App Package Boundary](docs/app-package-boundary.md).
 
 ## Production Run
 

@@ -2,6 +2,8 @@
 
 Citadel apps live in separate package repositories. The host wires selected installed app packages through a generated catalog, so new apps can be built and released without changing host or platform source.
 
+For task-oriented guides, see [Adding Apps](adding-apps.md) for host owners and [Developing Apps](developing-apps.md) for app authors.
+
 ## Installed App Contract
 
 Each app package exposes three public surfaces:
