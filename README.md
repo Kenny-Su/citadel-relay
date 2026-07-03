@@ -1,6 +1,6 @@
 # Citadel Platform
 
-A small real-time communication platform with bundled chat, chess, and snake apps. The platform owns identity, spaces, presence, Socket.IO routing, and shared errors; each app owns its own state, events, UI, and persistence.
+A small real-time communication platform that hosts installable Citadel app packages. The platform owns identity, spaces, presence, Socket.IO routing, and shared errors; each app package owns its own state, events, UI, and persistence.
 
 ## Local Development
 
@@ -10,8 +10,8 @@ npm run dev
 ```
 
 The Vite client runs at `http://localhost:5173` and the Socket.IO/Express backend runs at `http://localhost:3001`.
-`npm run dev` builds package artifacts once, installs local app pilots from packed artifacts, then watches the Platform package while the server and client run.
-First-party app sources are listed in `local-external-apps.json`; they are not root workspaces or root `file:` dependencies.
+`npm run dev` builds the Platform package, regenerates the installed app catalog, then watches the Platform package while the server and client run.
+Apps are normal installed package dependencies selected by `bundled-apps.json`.
 
 ## Test And Build
 
@@ -23,7 +23,35 @@ npm run test:production
 
 `npm run test:production` builds the client and checks that the production server serves `/health`, app routes such as `/apps/chat/spaces/general`, and legacy chat links such as `/rooms/general`.
 Generated root and package `dist/` directories are build output and are not committed.
-`npm run pack:local-package -- @citadel/app-snake` prepares the Snake pilot as an ignored packed npm artifact under `.citadel/app-packs` for external-app install checks. `npm run build` installs packages listed in `local-external-apps.json` from those packed artifacts before generating the bundled app catalog.
+`npm run generate:bundled-apps` validates each package listed in `bundled-apps.json` from `node_modules` and writes the generated catalog used by the client and server registries.
+
+## Apps
+
+To add an app, install its package and list the package name in `bundled-apps.json`:
+
+```json
+{
+  "packages": [
+    "@citadel-platform/app-chat",
+    "@example/citadel-app"
+  ]
+}
+```
+
+Then run:
+
+```bash
+npm install
+npm run generate:bundled-apps
+```
+
+An app package must depend on `@citadel-platform/platform`, declare `package.json#citadel` metadata, and export:
+
+- `.` for the neutral app descriptor, manifest, and shared types.
+- `./client` for a `ClientAppRegistration`.
+- `./server` for a `ServerAppRegistration`.
+
+The recommended app repo shape is `src/index.ts`, `src/client.tsx`, `src/server.ts`, optional app-owned shared modules and tests, and package scripts for `build`, `typecheck`, and `test`. Use `citadel-generate-app-metadata --package-dir .` in `prebuild` and `pretypecheck` so runtime metadata stays mirrored from `package.json#citadel`.
 
 ## Production Run
 

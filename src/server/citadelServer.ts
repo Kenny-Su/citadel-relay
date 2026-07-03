@@ -1,6 +1,6 @@
-import { createPlatformServer, type PlatformServerOptions } from '@citadel/platform/server';
-import type { AppId } from '@citadel/platform/app';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { createPlatformServer, type PlatformServerOptions } from '@citadel-platform/platform/server';
+import type { AppId } from '@citadel-platform/platform/app';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
 import { createBundledServerApps, filterAppManifests, getEnabledAppIds } from '../bundledApps/serverRegistry.js';
 
 export type CitadelServerOptions = Omit<PlatformServerOptions, 'apps' | 'appManifests'> & {

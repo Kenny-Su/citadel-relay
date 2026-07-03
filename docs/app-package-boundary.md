@@ -1,126 +1,112 @@
 # App Package Boundary
 
-Citadel apps own their implementation source in package folders, while the platform shell wires selected installed app packages through a generated catalog. Their public surfaces should stay package-shaped so the remaining split work stays mechanical instead of architectural.
+Citadel apps live in separate package repositories. The platform shell wires selected installed app packages through a generated catalog, so new apps can be built and released without changing platform source.
 
-## Public Surfaces
+## Installed App Contract
 
-Each bundled app exposes three environment-specific surfaces:
+Each app package exposes three public surfaces:
 
-- package root (`.`): neutral package descriptor, manifest, and shared types only.
+- package root (`.`): neutral app descriptor, manifest, constants, and shared types only.
 - `./client`: browser client registration, `ClientAppModule`, and view wiring.
-- `./server`: server registration, bundle, repository resolver, and server-only exports.
+- `./server`: server registration, bundle, persistence adapters, and server-only exports.
 
-In the current first-party app source packages, those surfaces are backed by `packages/apps/<app>/src/index.ts`, `packages/apps/<app>/src/client.tsx`, and `packages/apps/<app>/src/server.ts`. External apps only need to provide the package exports and installed `package.json#citadel` metadata.
-
-Bundled app order is declared as installed package names in `bundled-apps.json`. Catalog generation expects those packages to exist at `node_modules/<package>/package.json`: production/external hosts normally get that by declaring app package dependencies, while this repo's first-party app pilots get it from `local-external-apps.json`. Local app packages that should behave like installed external dependencies during the migration are declared there with package names plus source paths; the root build packs and installs those artifacts into `node_modules` before generating the installed-app catalog. Installed external apps only need to appear in `bundled-apps.json` and be installed by the host package manager. Each app package declares a `citadel` metadata block in its `package.json`; that package manifest metadata is the app discovery contract. Metadata includes manifest fields and client/server registration metadata. `@citadel/platform` publishes `citadel-generate-app-metadata`, which mirrors that package metadata into package-local generated runtime constants before app build, typecheck, and watch builds. `scripts/generate-bundled-apps.mjs` validates generator input, and `src/bundledApps/generatedAppCatalog.ts` is the generated installed-app catalog that mirrors selected package metadata and imports selected client/server registrations. `src/bundledApps/catalog.ts` is the handwritten host-facing facade over that generated bridge; runtime app definitions, client registries, and server registries derive their ordered app lists from the facade while keeping behavior environment-specific.
-
-Hosts may select installed apps that the current repo does not build. In that shape, `bundled-apps.json` names the installed runtime package, and catalog generation operates only on installed packages named by `bundled-apps.json`.
-
-To add an external app to a host, add the app package as a dependency, add its package name to `bundled-apps.json`, run install, and then run `npm run generate:bundled-apps`. If the package is not installed, catalog generation fails against the expected `node_modules/<package>/package.json` path instead of looking for source.
-
-Root lifecycle scripts build the Platform workspace artifact and install local external app artifacts before generating the installed-app catalog, because generation validates package `exports` by importing the built public surfaces. External app dependencies are expected to arrive already built. For local external-app pilots, `npm run pack:local-package -- @citadel/app-snake` builds the platform and the Snake source directory, then writes an ignored npm tarball under `.citadel/app-packs` so the host can test the same packed dependency shape an external package would use. `npm run install:local-external-apps` generates package-local app metadata, builds each source path in `local-external-apps.json`, packs it, installs the packed artifact into `node_modules`, and gives that installed app artifact its own non-Citadel runtime dependency directories; the root `build:packages` lifecycle skips the installer Platform build because `build:platform` has already prepared shared Platform artifacts.
-Root app-only libraries such as `chess.js` are local source-build bootstrap dev dependencies, not host runtime dependencies.
-
-Platform contracts are split by environment inside `packages/platform/src`:
-
-- `appContract.ts`: neutral app metadata such as `AppManifest` and `AppPackageDescriptor`.
-- `installedAppCatalogContract.ts`: generated installed-app catalog entries that pair descriptors with client and server registrations.
-- `clientAppContract.ts`: browser view contracts such as `AppViewProps`, `ClientAppModule`, and `ClientAppRegistration`.
-- `serverAppContract.ts`: server runtime contracts such as `ServerAppContext`, `ServerAppModule`, `ServerAppBundle`, and `ServerAppRegistration`.
-
-Bundled apps import platform APIs through small app-facing facades. These are the package-facing platform exports:
-
-- `@citadel/platform/app`: neutral app metadata, installed catalog entry types, app ids, participants, space helpers, and shared platform payload types.
-- `@citadel/platform/client`: browser app contracts.
-- `@citadel/platform/server-app`: server app contracts and shared platform server services.
-- `@citadel/platform/persistence`: persistence APIs intentionally available to app repositories.
-- `@citadel/platform/server`: host server runtime.
-- `@citadel/platform/validation`: platform validation helpers.
-
-The current repo resolves package-shaped imports through installed packages. Platform remains a root workspace package; bundled apps are installed artifacts prepared by local external-app tooling instead of root workspaces or root `file:` dependencies:
-
-- `@citadel/platform/app`, `@citadel/platform/client`, `@citadel/platform/server-app`, and `@citadel/platform/persistence`.
-- `@citadel/platform/server` and `@citadel/platform/validation`.
-- `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` with `./client` and `./server` surfaces.
-
-Local package source exists under `packages/` as the current local development shape for the source split. Package root TypeScript re-export shims are gone; public entrypoints are `dist` artifacts declared in package `exports`:
-
-- `@citadel/platform` owns its source under `packages/platform/src` and exports `./app`, `./client`, `./server-app`, `./persistence`, `./server`, and `./validation`.
-- `@citadel/app-chat`, `@citadel/app-chess`, and `@citadel/app-snake` export `.`, `./client`, and `./server`.
-- Each local package has a package-local no-emit TypeScript check. These checks prove package isolation without producing JavaScript or declarations. App-owned repository and validation tests live with the package source that owns that behavior; host tests cover installed package integration, generated catalog behavior, and public boundary rules.
-- Each local package also has a local package build that emits JavaScript and declarations into its ignored `dist/` directory. Package `exports` point at those built artifacts, and the host consumes packages through package resolution rather than source aliases.
-- App source packages carry standalone TypeScript configs and authoring-time dev dependencies. External app repos should be able to install `@citadel/platform`, run `citadel-generate-app-metadata`, and build without inheriting this monorepo's root `tsconfig` or root dev dependencies.
-- Platform and app package artifacts are built-package artifacts: npm pack allowlists `dist` plus `package.json`, so source files and TypeScript build configs are development inputs rather than external dependency contents.
-- Chat, Chess, and Snake are local-external pilots: root build scripts install them from packed artifacts instead of workspace build/watch maintenance. Local installed artifacts carry their own non-Citadel runtime dependency directories, while Platform stays a host package. Tests build each app from a standalone temp source package with packed Platform tooling, pack them from the source paths declared in `local-external-apps.json`, install the tarballs through npm into temp hosts with no workspaces, generate installed-app catalogs, and boot/import the host path from that packed dependency shape.
-- Local development watches the Platform workspace package alongside the server and Vite client. Apps in the local-external pilot path are prepared through packed artifacts before dev/test/build.
-
-Shared platform payloads and SQLite persistence are platform-owned under `packages/platform/src`.
-The currently bundled first-party apps are still local package source folders in this repo, but they are no longer root npm workspaces. Their implementations live under `packages/apps/<app>/src`, and the host sees them through installed package artifacts in `node_modules`.
-
-Shared server app services stay platform-only in `@citadel/platform/server-app`. App-specific server options, such as repository injection or chat rate limits, belong to each app server entrypoint and its app-owned server registration. The host server factory is `createCitadelServer`; app-named host server factories such as the old `createChatServer` compatibility surface have been removed.
-
-Neutral app package descriptors expose manifest, package name, and intended client/server registration export names. They are the runtime/public API mirror of the package manifest metadata, and must not import client or server implementation modules directly.
-
-## App-Owned State Machines
-
-Apps own their domain state machines. Stages and rules such as Snake `waiting`/`playing`, player readiness, Chess turns/checkmate, or Chat typing are app state and app events. The platform should continue to provide app-neutral primitives: identity, presence, transport, app state storage, and persistence contracts.
-
-App lifecycle terms may appear in app packages, app public types, and app protocol docs. They must not appear in platform contracts, host registries, generated app selection, or generic server service contracts. External apps should be able to add lobby, ready, round, match, or end-state rules without changing platform source.
-
-Package exports map each public surface to built JavaScript and declarations, for example:
+Each app package declares a `citadel` metadata block in `package.json`. That metadata is the discovery contract used by the host:
 
 ```json
 {
-  ".": {
-    "types": "./dist/index.d.ts",
-    "import": "./dist/index.js"
-  },
-  "./client": {
-    "types": "./dist/client.d.ts",
-    "import": "./dist/client.js"
-  },
-  "./server": {
-    "types": "./dist/server.d.ts",
-    "import": "./dist/server.js"
+  "citadel": {
+    "appId": "demo",
+    "label": "Demo",
+    "defaultSpaceId": "general",
+    "persistence": "sqlite",
+    "version": "0.1.0",
+    "client": {
+      "subpath": "./client",
+      "registrationExport": "demoClientRegistration"
+    },
+    "server": {
+      "subpath": "./server",
+      "registrationExport": "demoServerRegistration"
+    }
   }
 }
 ```
 
+Package exports should point at built JavaScript and declarations:
+
+```json
+{
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
+  }
+}
+```
+
+The package root descriptor must mirror `package.json#citadel`. App repos should run `citadel-generate-app-metadata --package-dir .` in `prebuild` and `pretypecheck` to generate package-local runtime constants from that metadata.
+
+## Host Integration
+
+The platform host selects apps by installed package name in `bundled-apps.json`. Every package named there must already resolve from `node_modules`.
+
+To add an app to a host:
+
+1. Add the app package as a dependency.
+2. Add its package name to `bundled-apps.json`.
+3. Run `npm install`.
+4. Run `npm run generate:bundled-apps`.
+
+`scripts/generate-bundled-apps.mjs` validates package names, installed package metadata, package exports, root descriptors, and configured client/server registration exports. It then writes `src/bundledApps/generatedAppCatalog.ts`, the only static bridge from the host to configured app packages.
+
+Runtime app definitions, client registries, and server registries derive from `src/bundledApps/catalog.ts`; handwritten host code should not import concrete app packages directly.
+
+## Platform Exports
+
+Apps import platform APIs through package-facing exports:
+
+- `@citadel-platform/platform/app`: neutral app metadata, installed catalog entry types, app ids, participants, space helpers, and shared platform payload types.
+- `@citadel-platform/platform/client`: browser app contracts.
+- `@citadel-platform/platform/server-app`: server app contracts and shared platform server services.
+- `@citadel-platform/platform/persistence`: persistence APIs available to app repositories.
+- `@citadel-platform/platform/server`: host server runtime.
+- `@citadel-platform/platform/validation`: platform validation helpers.
+
+The platform package artifact includes only `dist` plus `package.json`. It remains the only workspace package in this host repo.
+
+## App Repo Starter Shape
+
+A typical app repo contains:
+
+- `src/index.ts` for manifest, descriptor, constants, and shared type exports.
+- `src/client.tsx` for the `ClientAppRegistration` and React view wiring.
+- `src/server.ts` for the `ServerAppRegistration` and app-owned server service adapters.
+- App-owned modules such as state machines, repositories, validation, and tests.
+- Package scripts for `build`, `typecheck`, and `test`.
+
+Apps own their domain behavior. Stages and rules such as lobbies, readiness, turns, match state, typing, checkmate, scoring, or persistence tables belong inside app repos, not platform contracts or host registries.
+
 ## Import Rules
 
-- Platform core imports only platform contracts and generic server modules. It must not import concrete app internals.
+- Platform core imports only platform contracts and generic server modules.
+- Platform core must not import concrete app packages or app internals.
 - `bundled-apps.json` declares installed app package names only.
-- Every package named in `bundled-apps.json` must be installed before catalog generation. Production/external hosts should do that with normal package dependencies; this repo's first-party pilots do it through `local-external-apps.json`.
-- `local-external-apps.json` is optional migration data. When present, it declares local source package names and source paths that should be consumed as packed installed artifacts; external hosts with normally installed app dependencies do not need the file.
-- App `package.json` files declare Citadel metadata, including manifest data and client/server registration subpaths and export names.
-- App package artifacts expose runtime code through package `exports` that point at built `dist` JavaScript and declaration files.
-- Platform and app package manifests are publishable-shaped: they are not marked private, and npm pack includes only `dist` plus `package.json`.
-- Local packed app artifacts are written under ignored `.citadel/app-packs`; they are install inputs for pilots, not committed source.
-- The catalog generator validates the JSON selection data before resolving installed app packages.
-- First-party local app runtime descriptors are generated from package `citadel` metadata by the platform `citadel-generate-app-metadata` CLI; package `manifest.ts` files are aliases, not hand-written metadata copies.
-- `src/bundledApps/generatedAppCatalog.ts` is generated from app package manifest metadata and is the only static host bridge to configured app descriptors and client/server registration imports.
-- Runtime bundled app definitions derive from the catalog facade over `generatedAppCatalog.ts`, not from `bundled-apps.json`.
-- Installed/generated catalog data is the host source of truth for known app ids; platform app-id validation is syntax-only.
-- Handwritten client and server registries consume ordered descriptor and registration lists from `src/bundledApps/catalog.ts`; only the catalog facade reaches into generated installed-app data.
-- The client registry consumes catalog-provided client registrations plus neutral shared types.
-- The server registry consumes catalog-provided server registrations and calls app-owned server service adapters through that registration contract.
-- The production server entrypoint uses `createCitadelServer`; app-specific repository wiring belongs to app server entrypoints and app package tests, not host server compatibility wrappers.
-- Neutral app indexes do not import client modules, server bundles, repositories, repository resolvers, or implementation factories.
-- App code imports platform contracts, shared platform helpers, and persistence APIs through `@citadel/platform/*` aliases rather than relative platform, shared, or persistence paths.
-- Registries import bundled app public surfaces through `@citadel/app-*` package aliases rather than relative app entrypoint paths.
-- Platform implementation lives in `packages/platform/src`; root `src/platform` compatibility shims are removed.
-- Root shared and persistence compatibility shims are removed.
-- Bundled app assembly lives in `src/bundledApps`; root `src/apps` compatibility shims are removed.
-- App and Platform package root source entrypoint shims are removed; public package entrypoints are built `dist` artifacts declared in package `exports`.
-- Package `tsconfig.json` files include only package-local `src` files. They must not include root host code, tests, or sibling package source by relative path.
-- Package build configs emit artifacts into package-local `dist/` directories only. Generated artifacts are inspectable build output, not committed source of truth.
-- App client code must not import server entrypoints, repositories, message stores, or `node:*` modules.
+- The generated catalog is the only host file that imports configured app package client/server registration surfaces.
+- Neutral app package roots must not import client views, server bundles, repositories, stores, or implementation factories.
+- App client code must not import server entrypoints, repositories, stores, or `node:*` modules.
 - App server entrypoints must not import React views or app client modules.
-- Server-side code must not import `clientAppContract`, and client-side code must not import `serverAppContract`.
+- Server-side platform code must not import `clientAppContract`, and client-side platform code must not import `serverAppContract`.
 - Shared server service contracts must not mention concrete app repositories, enabled-app config, or app-specific options.
-
-Host tests should not own app repository, store, or validation internals. Those checks belong in app package test suites, while host tests use package public surfaces only for installed-package integration and boundary verification.
 
 ## Current Defaults
 
-App ids are open strings validated by syntax in the platform and by installed catalog membership in the host. Apps share one SQLite database by default, and each app owns its own tables or live state. This document does not introduce runtime plugin loading or a package split.
+App ids are open strings validated by syntax in the platform and by installed catalog membership in the host. Apps share one SQLite database by default, and each app owns its own tables or live state. Adding or changing apps is install-time composition: install packages, regenerate the catalog, and rebuild the host. Runtime plugin loading is out of scope for this phase.

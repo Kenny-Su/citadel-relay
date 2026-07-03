@@ -14,7 +14,7 @@ import {
   bundledAppDefinitions,
   bundledAppIds
 } from '../../src/bundledApps/catalog.js';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
 
 type BundledAppsConfig = {
   packages: string[];
@@ -49,22 +49,22 @@ describe('bundled server app registry', () => {
 
     expect(config).toEqual({
       packages: [
-        '@citadel/app-chat',
-        '@citadel/app-chess',
-        '@citadel/app-snake'
+        '@citadel-platform/app-chat',
+        '@citadel-platform/app-chess',
+        '@citadel-platform/app-snake'
       ]
     });
     expect(config.packages).toEqual([
-      '@citadel/app-chat',
-      '@citadel/app-chess',
-      '@citadel/app-snake'
+      '@citadel-platform/app-chat',
+      '@citadel-platform/app-chess',
+      '@citadel-platform/app-snake'
     ]);
     expect(bundledAppDefinitions.map((definition) => definition.appId)).toEqual(bundledAppIds);
     expect(bundledAppDefinitions.map((definition) => definition.manifest)).toEqual(bundledAppManifests);
     expect(bundledAppDefinitions.map((definition) => definition.packageName)).toEqual([
-      '@citadel/app-chat',
-      '@citadel/app-chess',
-      '@citadel/app-snake'
+      '@citadel-platform/app-chat',
+      '@citadel-platform/app-chess',
+      '@citadel-platform/app-snake'
     ]);
     expect(bundledAppManifests).toEqual([
       {

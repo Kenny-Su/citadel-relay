@@ -1,8 +1,8 @@
-import type { AppEventEnvelope, AppId, AppManifest } from '@citadel/platform/app';
-import type { ClientAppModule } from '@citadel/platform/client';
+import type { AppEventEnvelope, AppId, AppManifest } from '@citadel-platform/platform/app';
+import type { ClientAppModule } from '@citadel-platform/platform/client';
 import { bundledClientRegistrations } from '../bundledApps/catalog';
 
-export type { AppViewProps, ClientAppModule } from '@citadel/platform/client';
+export type { AppViewProps, ClientAppModule } from '@citadel-platform/platform/client';
 
 export const allClientApps = bundledClientRegistrations.map(
   (registration) => registration.clientApp

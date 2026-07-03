@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as Client, type Socket } from 'socket.io-client';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
 import { createCitadelServer } from '../../src/server/citadelServer.js';
-import type { AppEventEnvelope, AppId, AppManifest, PlatformErrorPayload, SpaceState } from '@citadel/platform/app';
+import type { AppEventEnvelope, AppId, AppManifest, PlatformErrorPayload, SpaceState } from '@citadel-platform/platform/app';
 
 function once<T>(socket: Socket, event: string) {
   return new Promise<T>((resolve) => {

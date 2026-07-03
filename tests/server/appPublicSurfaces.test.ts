@@ -3,33 +3,33 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bundledInstalledApps, bundledServerRegistrations } from '../../src/bundledApps/catalog.js';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
-import type { ServerAppContext } from '@citadel/platform/server-app';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
+import type { ServerAppContext } from '@citadel-platform/platform/server-app';
 import {
   chatServerRegistration as publicChatServerRegistration,
   createChatServerAppFromServices,
   resolveChatRepository,
   type ChatRepository
-} from '@citadel/app-chat/server';
+} from '@citadel-platform/app-chat/server';
 import {
   chessServerRegistration as publicChessServerRegistration,
   createChessServerAppFromServices,
   resolveChessRepository,
   type ChessRepository
-} from '@citadel/app-chess/server';
+} from '@citadel-platform/app-chess/server';
 import {
   chatAppPackage as publicChatAppPackage,
   chatManifest as publicChatManifest
-} from '@citadel/app-chat';
+} from '@citadel-platform/app-chat';
 import {
   chessAppPackage as publicChessAppPackage,
   chessManifest as publicChessManifest
-} from '@citadel/app-chess';
+} from '@citadel-platform/app-chess';
 import {
   snakeAppPackage as publicSnakeAppPackage,
   snakeManifest as publicSnakeManifest
-} from '@citadel/app-snake';
-import { snakeServerRegistration as publicSnakeServerRegistration } from '@citadel/app-snake/server';
+} from '@citadel-platform/app-snake';
+import { snakeServerRegistration as publicSnakeServerRegistration } from '@citadel-platform/app-snake/server';
 
 type CitadelPackageMetadata = {
   appId: string;

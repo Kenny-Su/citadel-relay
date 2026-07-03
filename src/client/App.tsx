@@ -10,7 +10,7 @@ import {
   type SpaceState,
   isAppId,
   normalizeSpaceId
-} from '@citadel/platform/app';
+} from '@citadel-platform/platform/app';
 import {
   clientApps,
   createClientAppsFromManifests,

@@ -1,6 +1,6 @@
-import type { AppId, AppManifest, AppPackageDescriptor, InstalledAppCatalogEntry } from '@citadel/platform/app';
-import type { ClientAppRegistration } from '@citadel/platform/client';
-import type { ServerAppRegistration } from '@citadel/platform/server-app';
+import type { AppId, AppManifest, AppPackageDescriptor, InstalledAppCatalogEntry } from '@citadel-platform/platform/app';
+import type { ClientAppRegistration } from '@citadel-platform/platform/client';
+import type { ServerAppRegistration } from '@citadel-platform/platform/server-app';
 import { bundledInstalledApps as generatedBundledInstalledApps } from './generatedAppCatalog.js';
 
 export type BundledAppDefinition = AppPackageDescriptor;

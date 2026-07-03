@@ -1,5 +1,5 @@
-import type { AppId, AppManifest } from '@citadel/platform/app';
-import type { ServerAppModule, ServerAppServices } from '@citadel/platform/server-app';
+import type { AppId, AppManifest } from '@citadel-platform/platform/app';
+import type { ServerAppModule, ServerAppServices } from '@citadel-platform/platform/server-app';
 import {
   bundledAppIds,
   bundledAppManifests,

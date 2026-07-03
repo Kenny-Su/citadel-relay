@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createCitadelServer } from '../../src/server/citadelServer.js';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
+import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
 
 const staticDir = resolve(process.cwd(), 'dist');
 const hasBuiltClient = existsSync(join(staticDir, 'index.html'));

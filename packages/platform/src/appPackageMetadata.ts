@@ -125,7 +125,7 @@ export function generateAppMetadataSource(packageDir: string) {
 
   return [
     header,
-    "import type { AppManifest, AppPackageDescriptor } from '@citadel/platform/app';",
+    "import type { AppManifest, AppPackageDescriptor } from '@citadel-platform/platform/app';",
     '',
     'export const generatedManifest = {',
     `  appId: ${literal(descriptor.manifest.appId)},`,
