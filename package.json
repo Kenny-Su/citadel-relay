@@ -10,8 +10,6 @@
     "node": ">=24.14.1 <25"
   },
   "scripts": {
-    "generate:local-app-metadata": "node scripts/generate-local-app-metadata.mjs",
-    "check:local-app-metadata": "node scripts/generate-local-app-metadata.mjs --check",
     "generate:bundled-apps": "node scripts/generate-bundled-apps.mjs",
     "check:bundled-apps": "node scripts/generate-bundled-apps.mjs --check",
     "predev": "npm run build:packages && npm run generate:bundled-apps",
@@ -33,7 +31,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "typecheck:packages": "npm run typecheck -w @citadel/platform",
     "pretest": "npm run build:packages && npm run generate:bundled-apps",
-    "test": "npm run check:local-app-metadata && npm run check:bundled-apps && vitest run",
+    "test": "npm run check:bundled-apps && vitest run",
     "test:production": "npm run build && vitest run tests/server/production.test.ts",
     "test:watch": "vitest"
   },

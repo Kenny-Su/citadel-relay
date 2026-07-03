@@ -648,8 +648,8 @@ describe('app package import boundaries', () => {
       'npm run typecheck:client && npm run typecheck:server && npm run typecheck:packages'
     );
     expect(rootPackage.scripts['typecheck:packages']).toBe('npm run typecheck -w @citadel/platform');
-    expect(rootPackage.scripts['generate:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs');
-    expect(rootPackage.scripts['check:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs --check');
+    expect(rootPackage.scripts).not.toHaveProperty('generate:local-app-metadata');
+    expect(rootPackage.scripts).not.toHaveProperty('check:local-app-metadata');
     expect(rootPackage.scripts['generate:bundled-apps']).toBe('node scripts/generate-bundled-apps.mjs');
     expect(rootPackage.scripts['check:bundled-apps']).toBe('node scripts/generate-bundled-apps.mjs --check');
     expect(rootPackage.scripts.predev).toBe('npm run build:packages && npm run generate:bundled-apps');
@@ -661,7 +661,7 @@ describe('app package import boundaries', () => {
     expect(rootPackage.scripts['dev:client']).toBe('vite --host 0.0.0.0');
     expect(rootPackage.scripts.prestart).toBe('npm run build:packages && npm run generate:bundled-apps');
     expect(rootPackage.scripts.pretest).toBe('npm run build:packages && npm run generate:bundled-apps');
-    expect(rootPackage.scripts.test).toBe('npm run check:local-app-metadata && npm run check:bundled-apps && vitest run');
+    expect(rootPackage.scripts.test).toBe('npm run check:bundled-apps && vitest run');
     expect(rootPackage.scripts.build).toBe(
       'npm run build:packages && npm run generate:bundled-apps && npm run typecheck && npm run build:client'
     );
@@ -926,7 +926,6 @@ describe('app package import boundaries', () => {
     const localExternalApps = jsonSource<LocalExternalAppsJson>('local-external-apps.json');
     const rootPackage = jsonSource<RootPackageJson>('package.json');
     const definitions = source('src/bundledApps/definitions.ts');
-    const localMetadataGenerator = source('scripts/generate-local-app-metadata.mjs');
     const generator = source('scripts/generate-bundled-apps.mjs');
     const generatedCatalog = source('src/bundledApps/generatedAppCatalog.ts');
     const catalog = source('src/bundledApps/catalog.ts');
@@ -943,20 +942,16 @@ describe('app package import boundaries', () => {
       { packageName: '@citadel/app-chess', sourcePath: 'packages/apps/chess' },
       { packageName: '@citadel/app-snake', sourcePath: 'packages/apps/snake' }
     ]);
-    expect(rootPackage.scripts?.['generate:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs');
-    expect(rootPackage.scripts?.['check:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs --check');
+    expect(rootPackage.scripts).not.toHaveProperty('generate:local-app-metadata');
+    expect(rootPackage.scripts).not.toHaveProperty('check:local-app-metadata');
     expect(rootPackage.scripts?.build).toContain('generate:bundled-apps');
     expect(rootPackage.scripts?.['build:packages']).not.toContain('generate:local-app-metadata');
     expect(rootPackage.scripts?.['build:packages']).toContain('install:local-external-apps');
-    expect(rootPackage.scripts?.test).toContain('check:local-app-metadata');
+    expect(rootPackage.scripts?.test).not.toContain('check:local-app-metadata');
     expect(jsonSource<PackageJson>('packages/platform/package.json').bin?.['citadel-generate-app-metadata']).toBe(
       './dist/generateAppMetadataCli.js'
     );
-    expect(localMetadataGenerator).toContain('package.json#citadel');
-    expect(localMetadataGenerator).toContain('citadel-generate-app-metadata');
-    expect(localMetadataGenerator).toContain('parseCitadelPackageMetadata');
-    expect(localMetadataGenerator).toContain('generatedManifest');
-    expect(localMetadataGenerator).toContain('generatedAppPackage');
+    expect(exists('scripts/generate-local-app-metadata.mjs')).toBe(false);
     expect(new Set(localExternalApps.packages.map((app) => app.packageName)).size).toBe(localExternalApps.packages.length);
     expect(exists('src/bundledApps/config.ts')).toBe(false);
     expect(generator).toContain("'node_modules'");
