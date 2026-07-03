@@ -392,6 +392,7 @@ describe('app package import boundaries', () => {
     for (const fileName of hostRuntimeFiles) {
       expect(source(fileName)).not.toMatch(forbiddenAppStateMachineLogic);
     }
+    expect(source('tests/server/socket.test.ts')).not.toMatch(forbiddenAppStateMachineLogic);
 
     expect(source(appImplementationPath('snake', 'serverApp.ts'))).toContain('snake:ready');
     expect(source(appImplementationPath('snake', 'shared.ts'))).toContain('SnakeStage');
@@ -509,6 +510,7 @@ describe('app package import boundaries', () => {
     );
     expect(socketTest).toContain('../../src/server/citadelServer.js');
     expect(socketTest).not.toContain('../../src/server/chatServer.js');
+    expect(socketTest).not.toMatch(/@citadel\/app-|ChatMessage|TypingUpdatePayload|ChessState|SnakeState/);
     expect(socketTest).not.toMatch(
       /@citadel\/app-(?:chat|chess)\/server|chatRepository|chessRepository|messageStore|messageRateLimit|createChatRepository|createChessRepository/
     );

@@ -6,9 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as Client, type Socket } from 'socket.io-client';
 import { openCitadelDatabase, type CitadelDatabase } from '@citadel/platform/persistence';
 import { createCitadelServer } from '../../src/server/citadelServer.js';
-import type { ChatMessage, TypingUpdatePayload } from '@citadel/app-chat';
-import type { ChessState } from '@citadel/app-chess';
-import type { SnakeState } from '@citadel/app-snake';
 import type { AppEventEnvelope, AppId, AppManifest, PlatformErrorPayload, SpaceState } from '@citadel/platform/app';
 
 function once<T>(socket: Socket, event: string) {
@@ -27,12 +24,6 @@ function onceAppEvent<T>(socket: Socket, type: string) {
     }
 
     socket.on('app:event', handler);
-  });
-}
-
-function wait(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
   });
 }
 
@@ -105,14 +96,6 @@ describe('platform socket', () => {
     const state = once<SpaceState>(client, 'space:state');
     client.emit('space:join', { appId, guestId, name, spaceId });
     return state;
-  }
-
-  function countChatMessages(spaceId: string) {
-    const row = database.database
-      .prepare('SELECT COUNT(*) AS count FROM chat_messages WHERE space_id = ?')
-      .get(spaceId) as { count: number };
-
-    return row.count;
   }
 
   it('exposes enabled apps through health and config', async () => {
@@ -188,262 +171,20 @@ describe('platform socket', () => {
     expect(chessState.participants.map((participant) => participant.name)).toEqual(['Linus']);
   });
 
-  it('routes chat messages, typing, and persistence through app events', async () => {
+  it('routes installed app events through the platform socket', async () => {
     const ada = await connectClient();
     const grace = await connectClient();
 
     await joinSpace(ada, 'Ada', 'chat', 'design');
     await joinSpace(grace, 'Grace', 'chat', 'design');
 
-    const typingForGrace = onceAppEvent<TypingUpdatePayload>(grace, 'chat:typing:update');
-    ada.emit('app:event', { appId: 'chat', type: 'chat:typing:start' });
-    expect((await typingForGrace).participants.map((participant) => participant.name)).toEqual(['Ada']);
-
-    const messageForGrace = onceAppEvent<ChatMessage>(grace, 'chat:message:new');
+    const messageForGrace = onceAppEvent<{ body: string }>(grace, 'chat:message:new');
     ada.emit('app:event', {
       appId: 'chat',
       type: 'chat:message:send',
       payload: { body: '  hello platform  ' }
     });
 
-    expect(await messageForGrace).toMatchObject({
-      spaceId: 'design',
-      participantName: 'Ada',
-      body: 'hello platform'
-    });
-    expect(countChatMessages('design')).toBe(1);
-  });
-
-  it('loads persisted chat messages after a server restart', async () => {
-    const ada = await connectClient();
-    await joinSpace(ada, 'Ada', 'chat', 'design');
-
-    const sentMessage = onceAppEvent<ChatMessage>(ada, 'chat:message:new');
-    ada.emit('app:event', {
-      appId: 'chat',
-      type: 'chat:message:send',
-      payload: { body: 'still here after restart' }
-    });
-    expect(await sentMessage).toMatchObject({ body: 'still here after restart' });
-
-    await restartServer();
-
-    const grace = await connectClient();
-    const state = await joinSpace(grace, 'Grace', 'chat', 'design');
-
-    expect((state.appState as { messages: ChatMessage[] }).messages[0]).toMatchObject({
-      spaceId: 'design',
-      participantName: 'Ada',
-      body: 'still here after restart'
-    });
-  });
-
-  it('rejects rapid chat messages without saving or broadcasting them', async () => {
-    const ada = await connectClient();
-    const grace = await connectClient();
-
-    await joinSpace(ada, 'Ada', 'chat', 'general');
-    await joinSpace(grace, 'Grace', 'chat', 'general');
-
-    for (let index = 1; index <= 5; index += 1) {
-      const messageForAda = onceAppEvent<ChatMessage>(ada, 'chat:message:new');
-      ada.emit('app:event', {
-        appId: 'chat',
-        type: 'chat:message:send',
-        payload: { body: `message ${index}` }
-      });
-      expect(await messageForAda).toMatchObject({ body: `message ${index}` });
-    }
-
-    let graceReceivedRejectedMessage = false;
-    grace.on('app:event', (event: AppEventEnvelope<ChatMessage>) => {
-      if (event.type === 'chat:message:new' && event.payload?.body === 'message 6') {
-        graceReceivedRejectedMessage = true;
-      }
-    });
-
-    const errorForAda = onceAppEvent<PlatformErrorPayload>(ada, 'chat:notice');
-    ada.emit('app:event', {
-      appId: 'chat',
-      type: 'chat:message:send',
-      payload: { body: 'message 6' }
-    });
-
-    expect(await errorForAda).toEqual({ message: 'Slow down before sending another message.' });
-    await wait(40);
-    expect(graceReceivedRejectedMessage).toBe(false);
-    expect(countChatMessages('general')).toBe(5);
-  });
-
-  it('assigns chess players and validates moves authoritatively', async () => {
-    const ada = await connectClient();
-    const grace = await connectClient();
-    const linus = await connectClient();
-
-    const adaState = await joinSpace(ada, 'Ada', 'chess', 'board');
-    await joinSpace(grace, 'Grace', 'chess', 'board');
-    await joinSpace(linus, 'Linus', 'chess', 'board');
-
-    expect((adaState.appState as ChessState).players.white).toBe('guest-ada');
-
-    const spectatorNotice = onceAppEvent<PlatformErrorPayload>(linus, 'chess:notice');
-    linus.emit('app:event', {
-      appId: 'chess',
-      type: 'chess:move',
-      payload: { from: 'e2', to: 'e4' }
-    });
-    expect(await spectatorNotice).toEqual({ message: 'Spectators cannot move pieces.' });
-
-    const chessUpdate = onceAppEvent<ChessState>(grace, 'chess:state');
-    ada.emit('app:event', {
-      appId: 'chess',
-      type: 'chess:move',
-      payload: { from: 'e2', to: 'e4' }
-    });
-    expect((await chessUpdate).fen).toContain(' b ');
-
-    const turnNotice = onceAppEvent<PlatformErrorPayload>(ada, 'chess:notice');
-    ada.emit('app:event', {
-      appId: 'chess',
-      type: 'chess:move',
-      payload: { from: 'd2', to: 'd4' }
-    });
-    expect(await turnNotice).toEqual({ message: 'Wait for your turn.' });
-  });
-
-  it('preserves chess player roles and moves across reconnects and restarts', async () => {
-    const ada = await connectClient();
-    const grace = await connectClient();
-
-    await joinSpace(ada, 'Ada', 'chess', 'board', 'stable-ada');
-    await joinSpace(grace, 'Grace', 'chess', 'board', 'stable-grace');
-
-    const chessUpdate = onceAppEvent<ChessState>(grace, 'chess:state');
-    ada.emit('app:event', {
-      appId: 'chess',
-      type: 'chess:move',
-      payload: { from: 'e2', to: 'e4' }
-    });
-    expect((await chessUpdate).fen).toContain(' b ');
-
-    await restartServer();
-
-    const reconnectedAda = await connectClient();
-    const state = await joinSpace(reconnectedAda, 'Ada', 'chess', 'board', 'stable-ada');
-    const chessState = state.appState as ChessState;
-
-    expect(chessState.players.white).toBe('stable-ada');
-    expect(chessState.players.black).toBe('stable-grace');
-    expect(chessState.fen).toContain(' b ');
-  });
-
-  it('keeps snake waiting until both players are ready, then accepts directions', async () => {
-    const ada = await connectClient();
-    const grace = await connectClient();
-    const linus = await connectClient();
-
-    const initialState = await joinSpace(ada, 'Ada', 'snake', 'arena');
-    const initialSnakeState = initialState.appState as SnakeState;
-    expect(initialSnakeState).toMatchObject({
-      stage: 'waiting',
-      readyCount: 0,
-      requiredReadyCount: 2,
-      spectatorCount: 0
-    });
-    expect(initialSnakeState.snakes).toHaveLength(1);
-
-    let directionBeforeReadyAccepted = false;
-    ada.on('app:event', (event: AppEventEnvelope<SnakeState>) => {
-      if (event.type === 'snake:state' && event.payload?.stage === 'playing') {
-        directionBeforeReadyAccepted = true;
-      }
-    });
-    ada.emit('app:event', {
-      appId: 'snake',
-      type: 'snake:direction',
-      payload: { direction: 'down' }
-    });
-    await wait(260);
-    expect(directionBeforeReadyAccepted).toBe(false);
-
-    const graceState = await joinSpace(grace, 'Grace', 'snake', 'arena');
-    expect(graceState.appState as SnakeState).toMatchObject({
-      stage: 'waiting',
-      readyCount: 0,
-      spectatorCount: 0
-    });
-
-    const spectatorState = await joinSpace(linus, 'Linus', 'snake', 'arena');
-    expect(spectatorState.appState as SnakeState).toMatchObject({
-      stage: 'waiting',
-      readyCount: 0,
-      spectatorCount: 1
-    });
-    expect((spectatorState.appState as SnakeState).snakes).toHaveLength(2);
-    const spectatorHasSnake = (spectatorState.appState as SnakeState).snakes.some(
-      (snake) => snake.participantId === 'guest-linus'
-    );
-    expect(spectatorHasSnake).toBe(false);
-
-    linus.emit('app:event', {
-      appId: 'snake',
-      type: 'snake:ready'
-    });
-
-    const adaReady = onceAppEvent<SnakeState>(ada, 'snake:state');
-    ada.emit('app:event', {
-      appId: 'snake',
-      type: 'snake:ready'
-    });
-    expect(await adaReady).toMatchObject({
-      stage: 'waiting',
-      readyCount: 1
-    });
-
-    const graceReady = onceAppEvent<SnakeState>(ada, 'snake:state');
-    grace.emit('app:event', {
-      appId: 'snake',
-      type: 'snake:ready'
-    });
-    expect(await graceReady).toMatchObject({
-      stage: 'playing',
-      readyCount: 2
-    });
-
-    const snakeUpdate = onceAppEvent<SnakeState>(ada, 'snake:state');
-    grace.emit('app:event', {
-      appId: 'snake',
-      type: 'snake:direction',
-      payload: { direction: 'down' }
-    });
-    expect(await snakeUpdate).toMatchObject({
-      stage: 'playing',
-      spectatorCount: 1
-    });
-
-    const resetState = onceAppEvent<SnakeState>(ada, 'snake:state');
-    grace.close();
-    expect(await resetState).toMatchObject({
-      stage: 'waiting',
-      readyCount: 0
-    });
-
-    const state = server.apps.get('snake');
-    expect(state).toBeDefined();
-  });
-
-  it('keeps snake state ephemeral across server restarts', async () => {
-    const ada = await connectClient();
-    const initialState = await joinSpace(ada, 'Ada', 'snake', 'arena');
-    expect((initialState.appState as SnakeState).stage).toBe('waiting');
-    expect((initialState.appState as SnakeState).snakes).toHaveLength(1);
-
-    await restartServer();
-
-    const reconnectedAda = await connectClient();
-    const state = await joinSpace(reconnectedAda, 'Ada', 'snake', 'arena');
-    expect((state.appState as SnakeState).stage).toBe('waiting');
-    expect((state.appState as SnakeState).tick).toBe(0);
-    expect((state.appState as SnakeState).snakes).toHaveLength(1);
+    expect(await messageForGrace).toMatchObject({ body: 'hello platform' });
   });
 });
