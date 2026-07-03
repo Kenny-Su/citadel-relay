@@ -23,7 +23,7 @@
     "start": "tsx src/server/index.ts",
     "build": "npm run build:packages && npm run generate:bundled-apps && npm run typecheck && npm run build:client",
     "build:client": "vite build",
-    "build:packages": "npm run generate:local-app-metadata && npm run build:platform && npm run install:local-external-apps",
+    "build:packages": "npm run build:platform && npm run install:local-external-apps",
     "build:platform": "npm run build -w @citadel/platform",
     "install:local-external-apps": "node scripts/install-local-external-apps.mjs --skip-platform-build",
     "pack:local-package": "node scripts/pack-local-package.mjs",

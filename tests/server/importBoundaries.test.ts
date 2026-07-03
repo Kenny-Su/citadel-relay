@@ -666,7 +666,7 @@ describe('app package import boundaries', () => {
       'npm run build:packages && npm run generate:bundled-apps && npm run typecheck && npm run build:client'
     );
     expect(rootPackage.scripts['build:packages']).toBe(
-      'npm run generate:local-app-metadata && npm run build:platform && npm run install:local-external-apps'
+      'npm run build:platform && npm run install:local-external-apps'
     );
     expect(rootPackage.scripts['build:platform']).toBe('npm run build -w @citadel/platform');
     expect(rootPackage.scripts['install:local-external-apps']).toBe(
@@ -946,7 +946,8 @@ describe('app package import boundaries', () => {
     expect(rootPackage.scripts?.['generate:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs');
     expect(rootPackage.scripts?.['check:local-app-metadata']).toBe('node scripts/generate-local-app-metadata.mjs --check');
     expect(rootPackage.scripts?.build).toContain('generate:bundled-apps');
-    expect(rootPackage.scripts?.['build:packages']).toContain('generate:local-app-metadata');
+    expect(rootPackage.scripts?.['build:packages']).not.toContain('generate:local-app-metadata');
+    expect(rootPackage.scripts?.['build:packages']).toContain('install:local-external-apps');
     expect(rootPackage.scripts?.test).toContain('check:local-app-metadata');
     expect(jsonSource<PackageJson>('packages/platform/package.json').bin?.['citadel-generate-app-metadata']).toBe(
       './dist/generateAppMetadataCli.js'
