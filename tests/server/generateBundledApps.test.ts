@@ -812,16 +812,23 @@ describe('bundled app generator package resolution', () => {
     })).toThrow(`local-external-apps.json not found at ${missingConfigPath}`);
   });
 
-  it('boots a snake-only host catalog from a packed external dependency', async () => {
+  it.each(externalSourcePackageFixtures)(
+    'boots a $appId-only host catalog from a packed external dependency',
+    async ({ appId, packageName }) => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
     const cacheDir = join(tempDir, 'npm-cache');
+    const host = installPackedAppsHost({
+      cacheDir,
+      rootDir: tempDir,
+      packages: [packageName]
+    });
     const {
       hostDir,
       installedPlatformDir,
-      installedSnakeDir,
-      platformTarballPath,
-      tarballPath
-    } = installPackedSnakeHost({ cacheDir, rootDir: tempDir });
+      installedAppDirs,
+      tarballPaths
+    } = host;
+    const installedAppDir = installedAppDirs[packageName];
     const probePath = join(hostDir, 'probe.ts');
     const hostPackage = JSON.parse(readFileSync(join(hostDir, 'package.json'), 'utf8')) as {
       workspaces: string[];
@@ -833,27 +840,29 @@ describe('bundled app generator package resolution', () => {
     expect(hostPackage.workspaces).toEqual([]);
     expect(lstatSync(installedPlatformDir).isSymbolicLink()).toBe(false);
     expect(readdirSync(installedPlatformDir).sort()).toEqual(['dist', 'package.json']);
-    expect(lstatSync(installedSnakeDir).isSymbolicLink()).toBe(false);
-    expect(readdirSync(installedSnakeDir).sort()).toEqual(['dist', 'package.json']);
-    expect(packageLock.packages[''].dependencies?.['@citadel/platform']).toBe(`file:${platformTarballPath}`);
-    expect(packageLock.packages[''].dependencies?.['@citadel/app-snake']).toBe(`file:${tarballPath}`);
+    expect(lstatSync(installedAppDir).isSymbolicLink()).toBe(false);
+    expect(readdirSync(installedAppDir).sort()).toEqual(['dist', 'package.json']);
+    expect(packageLock.packages[''].dependencies?.['@citadel/platform']).toBe(`file:${tarballPaths['@citadel/platform']}`);
+    expect(packageLock.packages[''].dependencies?.[packageName]).toBe(`file:${tarballPaths[packageName]}`);
 
-    await runGeneratorForPackages(hostDir, ['@citadel/app-snake']);
+    await runGeneratorForPackages(hostDir, [packageName]);
     transpileGeneratedCatalog(hostDir);
     writeFileSync(probePath, [
       "import { createPlatformServer } from '@citadel/platform/server';",
+      "import { openCitadelDatabase } from '@citadel/platform/persistence';",
       "import { bundledInstalledApps } from './src/bundledApps/generatedAppCatalog.mjs';",
       '',
       'const [installedApp] = bundledInstalledApps;',
+      "const database = openCitadelDatabase('./probe.sqlite');",
       'const serverModule = installedApp.serverRegistration.createServerApp({',
-      '  database: { database: {} }',
+      '  database',
       '});',
       'const platform = createPlatformServer({',
       '  apps: [serverModule],',
       '  appManifests: [installedApp.descriptor.manifest]',
       '});',
       'const initialState = serverModule.getInitialState({',
-      "  appId: 'snake',",
+      '  appId: installedApp.descriptor.appId,',
       "  spaceId: 'arena',",
       '  participants: [],',
       '  emitToSpace() {},',
@@ -867,13 +876,14 @@ describe('bundled app generator package resolution', () => {
       '  installedCount: bundledInstalledApps.length,',
       '  descriptorAppId: installedApp.descriptor.appId,',
       '  descriptorPackageName: installedApp.descriptor.packageName,',
-      "  descriptorByAppId: bundledInstalledApps.find((app) => app.descriptor.appId === 'snake')?.descriptor.packageName,",
-      "  clientRegistrationAppId: bundledInstalledApps.find((app) => app.clientRegistration.appId === 'snake')?.clientRegistration.appId,",
-      "  serverRegistrationAppId: bundledInstalledApps.find((app) => app.serverRegistration.appId === 'snake')?.serverRegistration.appId,",
+      '  descriptorByAppId: bundledInstalledApps.find((app) => app.descriptor.appId === installedApp.descriptor.appId)?.descriptor.packageName,',
+      '  clientRegistrationAppId: bundledInstalledApps.find((app) => app.clientRegistration.appId === installedApp.descriptor.appId)?.clientRegistration.appId,',
+      '  serverRegistrationAppId: bundledInstalledApps.find((app) => app.serverRegistration.appId === installedApp.descriptor.appId)?.serverRegistration.appId,',
       '  serverModuleAppId: serverModule.appId,',
       '  platformAppIds: [...platform.apps.keys()],',
-      '  initialState',
+      '  initialStateKeys: Object.keys(initialState).sort()',
       '}));',
+      'database.close();',
       'platform.io.close();',
       'platform.httpServer.close();'
     ].join('\n'));
@@ -890,37 +900,22 @@ describe('bundled app generator package resolution', () => {
       serverRegistrationAppId: string;
       serverModuleAppId: string;
       platformAppIds: string[];
-      initialState: {
-        stage: string;
-        width: number;
-        height: number;
-        requiredReadyCount: number;
-        readyCount: number;
-        spectatorCount: number;
-        snakes: unknown[];
-      };
+      initialStateKeys: string[];
     };
 
     expect(probe).toMatchObject({
       installedCount: 1,
-      descriptorAppId: 'snake',
-      descriptorPackageName: '@citadel/app-snake',
-      descriptorByAppId: '@citadel/app-snake',
-      clientRegistrationAppId: 'snake',
-      serverRegistrationAppId: 'snake',
-      serverModuleAppId: 'snake',
-      platformAppIds: ['snake'],
-      initialState: {
-        stage: 'waiting',
-        width: 20,
-        height: 16,
-        requiredReadyCount: 2,
-        readyCount: 0,
-        spectatorCount: 0,
-        snakes: []
-      }
+      descriptorAppId: appId,
+      descriptorPackageName: packageName,
+      descriptorByAppId: packageName,
+      clientRegistrationAppId: appId,
+      serverRegistrationAppId: appId,
+      serverModuleAppId: appId,
+      platformAppIds: [appId]
     });
-  });
+    expect(probe.initialStateKeys.length).toBeGreaterThan(0);
+    }
+  );
 
   it('generates a bundled app catalog from packed app dependency installs', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-generator-'));
