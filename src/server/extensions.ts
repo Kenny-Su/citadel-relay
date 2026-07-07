@@ -9,10 +9,10 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { AppId, AppManifest } from '@citadel-platform/platform/app';
-import type { ClientAppModule } from '@citadel-platform/platform/client';
-import type { ServerAppModule, ServerAppServices } from '@citadel-platform/platform/server-app';
-import { isAppId } from '@citadel-platform/platform/app';
+import type { AppId, AppManifest } from '../platform/app.js';
+import type { ClientAppModule } from '../platform/client.js';
+import type { ServerAppModule, ServerAppServices } from '../platform/server-app.js';
+import { isAppId } from '../platform/app.js';
 import { readZipEntries, type ZipEntries } from './zip.js';
 
 export type ExtensionAppManifest = AppManifest & {

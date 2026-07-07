@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as Client, type Socket } from 'socket.io-client';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
+import { openCitadelDatabase, type CitadelDatabase } from '../../src/platform/persistence.js';
 import { createCitadelServer } from '../../src/server/citadelServer.js';
-import { createPlatformServer } from '@citadel-platform/platform/server';
+import { createPlatformServer } from '../../src/platform/server.js';
 import type {
   AppEventEnvelope,
   AppId,
@@ -14,8 +14,8 @@ import type {
   Participant,
   PlatformErrorPayload,
   SpaceState
-} from '@citadel-platform/platform/app';
-import type { ServerAppModule } from '@citadel-platform/platform/server-app';
+} from '../../src/platform/app.js';
+import type { ServerAppModule } from '../../src/platform/server-app.js';
 
 function once<T>(socket: Socket, event: string) {
   return new Promise<T>((resolve) => {

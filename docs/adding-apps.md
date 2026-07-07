@@ -1,6 +1,6 @@
 # Adding Apps To A Citadel Host
 
-Citadel hosts support build-time bundled apps and trusted runtime extension uploads. Citadel packages in this repo are local `file:` dependencies, so host installs do not require the removed `@citadel-platform` npm registry packages.
+Citadel hosts support build-time bundled apps and trusted runtime extension uploads. Apps are normal packages or zips that follow the documented Citadel metadata and module protocol; they do not need a Citadel SDK dependency.
 
 ## Runtime Extension Uploads
 

@@ -1,6 +1,6 @@
 # Citadel Host
 
-A small real-time host for installable Citadel app packages. The host runs the web app and server, while `@citadel-platform/platform` provides the shared SDK/runtime for identity, spaces, presence, Socket.IO routing, persistence helpers, and app contracts. Each app package owns its own state, events, UI, and persistence.
+A small real-time host for installable Citadel app packages. The host owns the platform runtime for identity, spaces, presence, Socket.IO routing, persistence helpers, and app protocol validation. Each app package owns its own state, events, UI, and persistence.
 
 ## Local Development
 
@@ -11,7 +11,7 @@ npm run dev
 
 The Vite client runs at `http://localhost:5173` and the Socket.IO/Express backend runs at `http://localhost:3001`.
 `npm run dev` regenerates the installed app catalog, then runs the server and client.
-This repo uses local `file:` packages under `vendor/citadel-platform` for Citadel platform artifacts. Citadel package installs do not require the npm registry.
+Apps are installed as normal local packages or trusted extension zips. They follow the documented Citadel metadata/module protocol and do not need a shared Citadel SDK dependency.
 
 ## Test And Build
 
@@ -32,7 +32,7 @@ This host starts with no bundled apps. Apps can be added in two ways:
 
 - Host owners: see [Adding Apps](docs/adding-apps.md).
 - App authors: see [Developing Apps](docs/developing-apps.md).
-- Platform maintainers: see [Developing The Platform](docs/developing-platform.md).
+- Host platform maintainers: see [Developing The Host Platform](docs/developing-platform.md).
 - Package contract details: see [App Package Boundary](docs/app-package-boundary.md).
 
 ## Server Environment

@@ -77,10 +77,34 @@ function writeRuntimePackage(
     })};`
   ].join('\n'));
   writeFileSync(join(packageDir, 'dist/client.js'), options.clientExports ?? (
-    `export const ${metadata.client.registrationExport} = { appId: ${JSON.stringify(metadata.appId)} };\n`
+    [
+      'function View() { return null; }',
+      `export const ${metadata.client.registrationExport} = {`,
+      `  appId: ${JSON.stringify(metadata.appId)},`,
+      '  clientApp: {',
+      `    appId: ${JSON.stringify(metadata.appId)},`,
+      `    label: ${JSON.stringify(metadata.label)},`,
+      `    defaultSpaceId: ${JSON.stringify(metadata.defaultSpaceId)},`,
+      '    View',
+      '  }',
+      '};',
+      ''
+    ].join('\n')
   ));
   writeFileSync(join(packageDir, 'dist/server.js'), options.serverExports ?? (
-    `export const ${metadata.server.registrationExport} = { appId: ${JSON.stringify(metadata.appId)} };\n`
+    [
+      `export const ${metadata.server.registrationExport} = {`,
+      `  appId: ${JSON.stringify(metadata.appId)},`,
+      '  createServerApp() {',
+      '    return {',
+      `      appId: ${JSON.stringify(metadata.appId)},`,
+      '      getInitialState() { return {}; },',
+      '      handleEvent() {}',
+      '    };',
+      '  }',
+      '};',
+      ''
+    ].join('\n')
   ));
 }
 
@@ -250,15 +274,22 @@ describe('bundled app catalog generator', () => {
     );
   });
 
-  it('fails clearly when the package root does not export a descriptor matching metadata', async () => {
+  it('fails clearly when app runtime exports do not match the documented protocol shape', async () => {
     writeRuntimePackage(tempDir, '@example/app-demo', {
-      rootDescriptor: {
-        appId: 'other'
-      }
+      clientExports: 'export const demoBrowserRegistration = { appId: "demo" };\n'
     });
 
     await expect(runGeneratorForPackages(tempDir, ['@example/app-demo'])).rejects.toThrow(
-      'Bundled app package @example/app-demo root surface must export an app package descriptor matching citadel metadata'
+      'Bundled app package @example/app-demo/browser export demoBrowserRegistration must be a client app registration for demo'
+    );
+
+    const serverShapeFailureDir = join(tempDir, 'server-shape-failure');
+    writeRuntimePackage(serverShapeFailureDir, '@example/app-demo-server-shape', {
+      serverExports: 'export const demoNodeRegistration = { appId: "demo" };\n'
+    });
+
+    await expect(runGeneratorForPackages(serverShapeFailureDir, ['@example/app-demo-server-shape'])).rejects.toThrow(
+      'Bundled app package @example/app-demo-server-shape/node export demoNodeRegistration must be a server app factory, registration, or module for demo'
     );
   });
 
@@ -290,7 +321,7 @@ describe('bundled app catalog generator', () => {
 
     const generatedCatalog = sourceFrom(hostDir, 'src/bundledApps/generatedAppCatalog.ts');
 
-    expect(generatedCatalog).toContain("import type { InstalledAppCatalogEntry } from '@citadel-platform/platform/app';");
+    expect(generatedCatalog).toContain("import type { InstalledAppCatalogEntry } from '../platform/app.js';");
     expect(generatedCatalog).toContain('export const bundledInstalledApps = [');
     expect(generatedCatalog).not.toContain('AppPackageDescriptor');
     expect(generatedCatalog).not.toContain('import {');

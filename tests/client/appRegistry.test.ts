@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
-import type { ClientAppRegistration } from '@citadel-platform/platform/client';
+import type { ClientAppRegistration } from '../../src/platform/client.js';
 import {
   allClientApps,
   appById,

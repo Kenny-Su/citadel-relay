@@ -10,7 +10,7 @@ import {
   type SpaceState,
   isAppId,
   normalizeSpaceId
-} from '@citadel-platform/platform/app';
+} from '../platform/app.js';
 import {
   clientApps,
   createClientAppsFromConfig,

@@ -12,6 +12,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "baseUrl": ".",
+    "types": ["node"],
     "ignoreDeprecations": "6.0",
     "resolveJsonModule": true,
     "isolatedModules": true,

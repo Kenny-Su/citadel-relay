@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openCitadelDatabase } from '@citadel-platform/platform/persistence';
+import { openCitadelDatabase } from '../../src/platform/persistence.js';
 
 describe('citadel sqlite database', () => {
   let tempDir = '';

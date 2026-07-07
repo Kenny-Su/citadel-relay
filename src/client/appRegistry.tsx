@@ -1,8 +1,8 @@
-import type { AppEventEnvelope, AppId, AppManifest } from '@citadel-platform/platform/app';
-import type { ClientAppModule, ClientAppRegistration } from '@citadel-platform/platform/client';
+import type { AppEventEnvelope, AppId, AppManifest } from '../platform/app.js';
+import type { ClientAppModule, ClientAppRegistration } from '../platform/client.js';
 import { bundledClientRegistrations } from '../bundledApps/catalog';
 
-export type { AppViewProps, ClientAppModule } from '@citadel-platform/platform/client';
+export type { AppViewProps, ClientAppModule } from '../platform/client.js';
 
 type ClientAppRegistryOptions = {
   loadModule?: (url: string) => Promise<Record<string, unknown>>;

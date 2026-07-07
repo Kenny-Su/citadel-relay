@@ -1,30 +1,22 @@
-# Developing The Platform
+# Developing The Host Platform
 
-The reusable Citadel SDK/runtime lives outside this host repo at:
+The reusable Citadel contracts and runtime now live inside this host repo under `src/platform`.
 
-```text
-/Users/suwenhao/citadel-platform
-```
+Use this area when changing:
 
-That repository builds `@citadel-platform/platform`, which provides the contracts and runtime helpers used by hosts and app packages. This host consumes the package from `vendor/citadel-platform/platform` with a local `file:` dependency.
+- public app metadata and wire payload types in `src/platform/app.ts` and `src/platform/shared.ts`
+- client app registration shape in `src/platform/client.ts`
+- server app context, module, factory, and service shapes in `src/platform/server-app.ts`
+- persistence helpers in `src/platform/persistence.ts`
+- the Socket.IO/Express host runtime in `src/platform/server.ts`
+- host validation helpers in `src/platform/validation.ts`
 
-Use the platform repo when changing:
+External apps do not need to import these modules. They follow the documented metadata, module export shapes, and Socket.IO protocol. Keep those docs updated whenever a platform contract change affects app authors.
 
-- public app contracts under `@citadel-platform/platform/app`
-- client app contracts under `@citadel-platform/platform/client`
-- server app contracts under `@citadel-platform/platform/server-app`
-- persistence helpers under `@citadel-platform/platform/persistence`
-- the reusable Socket.IO server runtime under `@citadel-platform/platform/server`
-- the `citadel-generate-app-metadata` CLI
-
-Verify platform changes in that repo:
+Verify host platform changes from this repo:
 
 ```bash
-npm install
-npm run build
+npm run generate:bundled-apps
 npm run typecheck
 npm test
-npm pack --dry-run
 ```
-
-After building a new platform artifact, replace `vendor/citadel-platform/platform`, refresh `package-lock.json`, and run the host verification suite.

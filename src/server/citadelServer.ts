@@ -1,6 +1,6 @@
-import { createPlatformServer, type PlatformServerOptions } from '@citadel-platform/platform/server';
-import type { AppId } from '@citadel-platform/platform/app';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
+import { createPlatformServer, type PlatformServerOptions } from '../platform/server.js';
+import type { AppId } from '../platform/app.js';
+import { openCitadelDatabase, type CitadelDatabase } from '../platform/persistence.js';
 import express from 'express';
 import { join } from 'node:path';
 import {

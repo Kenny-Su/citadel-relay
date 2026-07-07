@@ -14,7 +14,7 @@ import {
   bundledAppDefinitions,
   bundledAppIds
 } from '../../src/bundledApps/catalog.js';
-import { openCitadelDatabase, type CitadelDatabase } from '@citadel-platform/platform/persistence';
+import { openCitadelDatabase, type CitadelDatabase } from '../../src/platform/persistence.js';
 
 type BundledAppsConfig = {
   packages: string[];

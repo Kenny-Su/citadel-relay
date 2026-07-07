@@ -1,24 +1,6 @@
 # Developing Apps For Citadel
 
-Citadel apps are independent local packages or trusted extension zips. They depend on the local `@citadel-platform/platform` SDK, expose a small public contract, and own all app-specific UI, events, state, validation, and persistence.
-
-## Scaffold A New App
-
-Use `create-citadel-app` to start from a working package:
-
-```bash
-npm create citadel-app@latest poker
-cd citadel-app-poker
-npm install
-npm run build
-npm test
-```
-
-For local development from this repository before the generator is published:
-
-```bash
-node ../create-citadel-app/bin/create-citadel-app.js poker
-```
+Citadel apps are independent local packages or trusted extension zips. They follow the host's documented metadata and module protocol, and own all app-specific UI, events, state, validation, and persistence.
 
 ## Repository Shape
 
@@ -29,7 +11,6 @@ citadel-app-demo/
   package.json
   tsconfig.json
   src/
-    generatedMetadata.ts
     index.ts
     client.tsx
     server.ts
@@ -38,7 +19,7 @@ citadel-app-demo/
     server.test.ts
 ```
 
-`src/generatedMetadata.ts` is generated from `package.json#citadel` by `citadel-generate-app-metadata`.
+The host does not require app packages to depend on a Citadel SDK. App authors may define local TypeScript types that mirror this protocol, but runtime compatibility is determined by `package.json#citadel` and the exported module shapes.
 
 ## Package Metadata
 
@@ -53,12 +34,7 @@ Declare the app contract in `package.json`:
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
-  "dependencies": {
-    "@citadel-platform/platform": "file:../citadel-host/vendor/citadel-platform/platform"
-  },
   "scripts": {
-    "prebuild": "citadel-generate-app-metadata --package-dir .",
-    "pretypecheck": "citadel-generate-app-metadata --package-dir . --check",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
@@ -103,25 +79,35 @@ Use `persistence: "sqlite"` when the app owns SQLite tables through the host dat
 
 ## Root Export
 
-The package root should export neutral metadata, constants, validation helpers, and shared types. It must not import React views, server bundles, repositories, or Node-only modules.
+The package root may export neutral app constants, validation helpers, and shared types. It must not import React views, server bundles, repositories, or Node-only modules. The host reads app identity and entrypoint details from `package.json#citadel`, not from a generated root descriptor.
 
 ```ts
 // src/index.ts
-export { generatedAppPackage as demoAppPackage, generatedManifest as demoManifest } from './generatedMetadata.js';
 export type DemoState = {
   count: number;
 };
+
+export const demoEvents = {
+  increment: 'demo:increment'
+} as const;
 ```
 
 ## Client Export
 
-The client entrypoint exports a `ClientAppRegistration`. The view receives current participant data, current app state, and a `sendAppEvent` helper.
+The client entrypoint exports the configured registration name. The view receives current participant data, current app state, and host helpers.
 
 ```tsx
 // src/client.tsx
-import type { ClientAppRegistration, AppViewProps } from '@citadel-platform/platform/client';
-import { generatedManifest } from './generatedMetadata.js';
 import type { DemoState } from './index.js';
+
+type AppViewProps<TState = unknown> = {
+  currentParticipant: { id: string; socketId?: string; name: string };
+  spaceId: string;
+  participants: Array<{ id: string; socketId?: string; name: string }>;
+  appState: TState;
+  sendAppEvent(type: string, payload?: unknown): void;
+  setNotice(message: string): void;
+};
 
 function DemoView({ appState, sendAppEvent }: AppViewProps<DemoState>) {
   return (
@@ -132,29 +118,27 @@ function DemoView({ appState, sendAppEvent }: AppViewProps<DemoState>) {
 }
 
 export const demoClientRegistration = {
-  appId: generatedManifest.appId,
+  appId: 'demo',
   clientApp: {
-    appId: generatedManifest.appId,
-    label: generatedManifest.label,
-    defaultSpaceId: generatedManifest.defaultSpaceId,
+    appId: 'demo',
+    label: 'Demo',
+    defaultSpaceId: 'general',
     View: DemoView
   }
-} satisfies ClientAppRegistration<DemoState>;
+};
 ```
 
 ## Server Export
 
-The server entrypoint exports a `ServerAppRegistration`. The server module owns initial state and handles app events.
+The server entrypoint exports the configured registration name. The export may be a factory, a registration object with `createServerApp`, or a server module with `getInitialState` and `handleEvent`.
 
 ```ts
 // src/server.ts
-import type { ServerAppModule, ServerAppRegistration } from '@citadel-platform/platform/server-app';
-import { generatedManifest } from './generatedMetadata.js';
 import type { DemoState } from './index.js';
 
-function createDemoServerApp(): ServerAppModule {
+function createDemoServerApp() {
   return {
-    appId: generatedManifest.appId,
+    appId: 'demo',
     getInitialState(context) {
       return context.getAppState<DemoState>() ?? { count: 0 };
     },
@@ -171,18 +155,16 @@ function createDemoServerApp(): ServerAppModule {
 }
 
 export const demoServerRegistration = {
-  appId: generatedManifest.appId,
-  bundle: {
-    appId: generatedManifest.appId,
-    createServerApp: createDemoServerApp
-  },
+  appId: 'demo',
   createServerApp: createDemoServerApp
-} satisfies ServerAppRegistration<unknown>;
+};
 ```
+
+The server context includes `appId`, `spaceId`, `socketId`, `participant`, `participants`, `emitToSpace`, `emitToParticipant`, `emitSpaceState`, `getAppState`, `setAppState`, and `clearAppState`.
 
 ## Persistence
 
-For SQLite-backed apps, import persistence helpers from `@citadel-platform/platform/persistence` and keep tables app-owned. Do not add app tables or repositories to the host or platform package. The host passes the shared database through server app services.
+For SQLite-backed apps, use the database service passed to `createServerApp(services)`. Apps own their tables and repositories. Do not add app tables or repositories to the host.
 
 ## Local Host Testing
 
