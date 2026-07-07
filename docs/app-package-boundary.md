@@ -83,7 +83,7 @@ Apps import platform APIs through package-facing exports:
 - `@citadel-platform/platform/server`: host server runtime.
 - `@citadel-platform/platform/validation`: platform validation helpers.
 
-The platform package artifact includes only `dist` plus `package.json`. The platform source lives in its own repository and this host consumes it as the published `@citadel-platform/platform` package.
+The platform package artifact includes only `dist` plus `package.json`. The platform source lives in its own repository and this host consumes the artifact from `vendor/citadel-platform/platform` as a local `file:` dependency.
 
 ## App Repo Starter Shape
 

@@ -5,6 +5,7 @@ import {
   allClientApps,
   appById,
   createClientAppRegistry,
+  createClientAppsFromConfig,
   createClientAppsFromManifests,
   filterClientApps
 } from '../../src/client/appRegistry';
@@ -35,13 +36,16 @@ const fixtureRegistrations = [
 ] satisfies ClientAppRegistration<unknown>[];
 
 describe('client app registry', () => {
-  it('defaults to an empty host app catalog', () => {
+  it('defaults to an empty host app catalog', async () => {
     expect(allClientApps).toEqual([]);
     expect([...appById.keys()]).toEqual([]);
     expect(filterClientApps(['alpha'])).toEqual([]);
     expect(createClientAppsFromManifests([
       { appId: 'alpha', label: 'Alpha from server', defaultSpaceId: 'server-room' }
     ])).toBeNull();
+    await expect(createClientAppsFromConfig([
+      { appId: 'alpha', label: 'Alpha from server', defaultSpaceId: 'server-room' }
+    ])).resolves.toBeNull();
   });
 
   it('filters fixture client apps by enabled app ids', () => {
@@ -79,5 +83,48 @@ describe('client app registry', () => {
     expect(registry.createClientAppsFromManifests([
       { appId: 'unknown', label: 'Unknown', defaultSpaceId: 'unknown' }
     ])).toBeNull();
+  });
+
+  it('loads extension client apps from config module urls', async () => {
+    const extensionView = () => React.createElement('div', null, 'Extension app');
+    const registry = createClientAppRegistry([], {
+      async loadModule(url) {
+        expect(url).toBe('/extensions/gamma/0.1.0/client.js');
+        return {
+          gammaClientRegistration: {
+            appId: 'gamma',
+            clientApp: {
+              appId: 'gamma',
+              label: 'Gamma local',
+              defaultSpaceId: 'local-room',
+              View: extensionView
+            }
+          }
+        };
+      }
+    });
+
+    const apps = await registry.createClientAppsFromConfig([
+      {
+        appId: 'gamma',
+        label: 'Gamma from server',
+        defaultSpaceId: 'server-room',
+        clientModuleUrl: '/extensions/gamma/0.1.0/client.js'
+      }
+    ], ['gamma']);
+
+    expect(apps?.map((app) => ({
+      appId: app.appId,
+      label: app.label,
+      defaultSpaceId: app.defaultSpaceId,
+      View: app.View
+    }))).toEqual([
+      {
+        appId: 'gamma',
+        label: 'Gamma from server',
+        defaultSpaceId: 'server-room',
+        View: extensionView
+      }
+    ]);
   });
 });

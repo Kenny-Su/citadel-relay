@@ -75,7 +75,7 @@ const fixtureManifest: AppManifest = {
 };
 
 describe('host socket with empty app catalog', () => {
-  let server: ReturnType<typeof createCitadelServer>;
+  let server: Awaited<ReturnType<typeof createCitadelServer>>;
   let tempDir: string;
   let database: CitadelDatabase;
   let url: string;
@@ -84,9 +84,10 @@ describe('host socket with empty app catalog', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-host-socket-'));
     database = openCitadelDatabase(join(tempDir, 'citadel.sqlite'));
-    server = createCitadelServer({
+    server = await createCitadelServer({
       clientOrigin: '*',
-      database
+      database,
+      extensionsDir: join(tempDir, 'extensions')
     });
     await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
     const address = server.httpServer.address() as AddressInfo;
@@ -128,7 +129,7 @@ describe('host socket with empty app catalog', () => {
     });
   });
 
-  it('rejects joins when no apps are installed', async () => {
+  it('rejects joins for unknown apps', async () => {
     const ada = await connectClient();
     const error = once<PlatformErrorPayload>(ada, 'error:notice');
 

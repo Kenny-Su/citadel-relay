@@ -9,7 +9,7 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
 const serverDir = dirname(fileURLToPath(import.meta.url));
 const staticDir = resolve(serverDir, '..', '..', 'dist');
 
-const { httpServer } = createCitadelServer({
+const { httpServer } = await createCitadelServer({
   clientOrigin: CLIENT_ORIGIN,
   staticDir: existsSync(resolve(staticDir, 'index.html')) ? staticDir : undefined,
   enabledAppIdsInput: process.env.CITADEL_ENABLED_APPS

@@ -6,7 +6,7 @@ The reusable Citadel SDK/runtime lives outside this host repo at:
 /Users/suwenhao/citadel-platform
 ```
 
-That repository publishes `@citadel-platform/platform`, which provides the contracts and runtime helpers used by hosts and app packages.
+That repository builds `@citadel-platform/platform`, which provides the contracts and runtime helpers used by hosts and app packages. This host consumes the package from `vendor/citadel-platform/platform` with a local `file:` dependency.
 
 Use the platform repo when changing:
 
@@ -27,4 +27,4 @@ npm test
 npm pack --dry-run
 ```
 
-After publishing a new `@citadel-platform/platform` version, update this host's dependency and run the host verification suite.
+After building a new platform artifact, replace `vendor/citadel-platform/platform`, refresh `package-lock.json`, and run the host verification suite.

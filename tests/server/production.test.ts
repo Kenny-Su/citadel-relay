@@ -10,7 +10,7 @@ const staticDir = resolve(process.cwd(), 'dist');
 const hasBuiltClient = existsSync(join(staticDir, 'index.html'));
 
 describe.skipIf(!hasBuiltClient)('production server', () => {
-  let server: ReturnType<typeof createCitadelServer>;
+  let server: Awaited<ReturnType<typeof createCitadelServer>>;
   let tempDir: string;
   let database: CitadelDatabase;
   let url: string;
@@ -18,10 +18,11 @@ describe.skipIf(!hasBuiltClient)('production server', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'citadel-platform-production-'));
     database = openCitadelDatabase(join(tempDir, 'citadel.sqlite'));
-    server = createCitadelServer({
+    server = await createCitadelServer({
       clientOrigin: '*',
       database,
-      staticDir
+      staticDir,
+      extensionsDir: join(tempDir, 'extensions')
     });
     await new Promise<void>((resolveListen) =>
       server.httpServer.listen(0, '127.0.0.1', resolveListen)

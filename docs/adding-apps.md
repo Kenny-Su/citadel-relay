@@ -1,21 +1,31 @@
 # Adding Apps To A Citadel Host
 
-Citadel hosts compose apps at install time. You do not edit host source code to add an app; you install an npm package, list it in `bundled-apps.json`, regenerate the generated catalog, and rebuild the host.
+Citadel hosts support build-time bundled apps and trusted runtime extension uploads. Citadel packages in this repo are local `file:` dependencies, so host installs do not require the removed `@citadel-platform` npm registry packages.
 
-## Install Apps
+## Runtime Extension Uploads
 
-Install one or more app packages into the host:
+Use the host UI to upload a built extension zip. The server validates and stores it under `data/extensions/<appId>/<version>/`, records it in `data/extensions/installed-apps.json`, and returns a restart-required message. Restart the host to load the extension.
+
+The zip must contain:
+
+- `package.json` with `citadel` metadata.
+- `citadel.client.bundle`, pointing to a browser-ready ESM client bundle in the zip.
+- `citadel.server.module`, pointing to a Node ESM server module in the zip.
+
+Uploaded extensions are trusted admin code. They execute in the browser and server process after restart.
+
+## Bundled Apps
+
+Bundled apps are local package dependencies selected at build time. Add one or more app packages to `package.json` with `file:` paths:
 
 ```bash
-npm install @citadel-platform/app-chat @citadel-platform/app-chess @citadel-platform/app-snake
+npm install ../citadel-app-demo --save
 ```
 
-Private packages, git dependencies, local tarballs, and workspace-linked packages are fine as long as they resolve from `node_modules`:
+Local tarballs and workspace-linked packages are fine as long as they resolve from `node_modules`:
 
 ```bash
-npm install @your-scope/citadel-app-demo
 npm install ../citadel-app-demo/citadel-app-demo-0.1.0.tgz
-npm install git+ssh://git@github.com/your-org/citadel-app-demo.git
 ```
 
 ## Select Apps
@@ -25,9 +35,8 @@ Edit `bundled-apps.json` in the host. The order controls the app tab order and t
 ```json
 {
   "packages": [
-    "@citadel-platform/app-chat",
-    "@citadel-platform/app-chess",
-    "@citadel-platform/app-snake"
+    "@your-scope/citadel-app-demo",
+    "@your-scope/citadel-app-board"
   ]
 }
 ```
@@ -53,14 +62,14 @@ For production, commit the changed `package.json`, `package-lock.json`, `bundled
 CITADEL_ENABLED_APPS=chat,snake npm start
 ```
 
-Unknown ids are ignored. If nothing valid remains, the host falls back to the installed catalog order. With the checked-in empty host, no apps are enabled.
+Unknown ids are ignored. If nothing valid remains, the host falls back to the installed catalog order.
 
 ## Remove An App
 
-Remove the package from `bundled-apps.json`, uninstall it, regenerate, and rebuild:
+Remove the package from `bundled-apps.json`, uninstall or remove the local dependency, regenerate, and rebuild:
 
 ```bash
-npm uninstall @citadel-platform/app-chat
+npm uninstall @your-scope/citadel-app-demo
 npm run generate:bundled-apps
 npm run build
 ```

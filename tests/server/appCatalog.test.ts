@@ -22,7 +22,7 @@ describe('bundled app catalog', () => {
 
   it('orders entries by the current bundled catalog order', () => {
     const ordered = orderBundledAppEntries({
-      alpha: { appId: 'alpha', value: 1 }
+      snake: { appId: 'snake', value: 1 }
     });
 
     expect(ordered).toEqual([]);

@@ -1,6 +1,24 @@
 # Developing Apps For Citadel
 
-Citadel apps are independent npm packages. They depend on `@citadel-platform/platform`, expose a small public contract, and own all app-specific UI, events, state, validation, and persistence.
+Citadel apps are independent local packages or trusted extension zips. They depend on the local `@citadel-platform/platform` SDK, expose a small public contract, and own all app-specific UI, events, state, validation, and persistence.
+
+## Scaffold A New App
+
+Use `create-citadel-app` to start from a working package:
+
+```bash
+npm create citadel-app@latest poker
+cd citadel-app-poker
+npm install
+npm run build
+npm test
+```
+
+For local development from this repository before the generator is published:
+
+```bash
+node ../create-citadel-app/bin/create-citadel-app.js poker
+```
 
 ## Repository Shape
 
@@ -36,7 +54,7 @@ Declare the app contract in `package.json`:
     "react-dom": "^19.1.0"
   },
   "dependencies": {
-    "@citadel-platform/platform": "^0.1.0"
+    "@citadel-platform/platform": "file:../citadel-host/vendor/citadel-platform/platform"
   },
   "scripts": {
     "prebuild": "citadel-generate-app-metadata --package-dir .",
@@ -168,7 +186,7 @@ For SQLite-backed apps, import persistence helpers from `@citadel-platform/platf
 
 ## Local Host Testing
 
-During app development, build or pack the app, install it into a host, add it to `bundled-apps.json`, and regenerate:
+During app development, build or pack the app, install it into a host from a local path, add it to `bundled-apps.json`, and regenerate:
 
 ```bash
 # in the app repo
@@ -196,11 +214,35 @@ npm run generate:bundled-apps
 npm run dev
 ```
 
+## Extension Zip Testing
+
+For runtime installation, build a browser-ready client bundle and Node ESM server module, then zip them with `package.json`. The package metadata must include `citadel.client.bundle` and `citadel.server.module`:
+
+```json
+{
+  "citadel": {
+    "appId": "demo",
+    "label": "Demo",
+    "defaultSpaceId": "general",
+    "persistence": "none",
+    "version": "0.1.0",
+    "client": {
+      "bundle": "client.js"
+    },
+    "server": {
+      "module": "server.js"
+    }
+  }
+}
+```
+
+Upload the zip from the host UI and restart the host after the installer reports success.
+
 ## Release Checklist
 
 - `npm run build`
 - `npm run typecheck`
 - `npm test`
 - `npm pack --dry-run`
-- Install the packed tarball into a host and run `npm run generate:bundled-apps`
-- Publish with `npm publish --access public` for scoped public packages
+- Install the packed tarball into a host from a local path and run `npm run generate:bundled-apps`
+- Build and upload an extension zip when testing runtime installation

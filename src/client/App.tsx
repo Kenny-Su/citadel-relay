@@ -13,6 +13,7 @@ import {
 } from '@citadel-platform/platform/app';
 import {
   clientApps,
+  createClientAppsFromConfig,
   createClientAppsFromManifests,
   filterClientApps,
   appById,
@@ -220,6 +221,7 @@ export function App() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [appState, setAppState] = React.useState<unknown>(null);
   const [notice, setNotice] = React.useState('');
+  const [installingExtension, setInstallingExtension] = React.useState(false);
 
   const visibleApps = availableApps ?? [];
   const currentApp = visibleApps.find((app) => app.appId === route.appId) ?? visibleApps[0] ?? clientApps[0];
@@ -250,7 +252,9 @@ export function App() {
         const response = await fetch('/config');
         const config = (await response.json()) as ClientConfig;
         const appIds = getConfigAppIds(config);
-        const apps = createClientAppsFromManifests(config.appManifests, appIds) ?? filterClientApps(appIds);
+        const apps = await createClientAppsFromConfig(config.appManifests, appIds)
+          ?? createClientAppsFromManifests(config.appManifests, appIds)
+          ?? filterClientApps(appIds);
 
         if (!active) {
           return;
@@ -444,6 +448,34 @@ export function App() {
     }
   }
 
+  async function installExtension(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    setInstallingExtension(true);
+    setNotice('');
+
+    try {
+      const response = await fetch('/admin/extensions', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json() as { message?: string };
+
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Extension install failed.');
+      }
+
+      form.reset();
+      setNotice(result.message ?? 'Extension installed. Restart the host to enable it.');
+    } catch (error) {
+      setNotice((error as Error).message);
+    } finally {
+      setInstallingExtension(false);
+    }
+  }
+
   function sendAppEvent(type: string, payload?: unknown) {
     if (!currentApp) {
       return;
@@ -512,7 +544,14 @@ export function App() {
         ) : !currentApp || !AppView ? (
           <div className="empty-state empty-host-state">
             <strong>No apps installed.</strong>
-            <span>Install an app package, add it to bundled-apps.json, then regenerate the app catalog.</span>
+            <span>Upload a built Citadel app extension, then restart the host to enable it.</span>
+            <form className="extension-installer" onSubmit={installExtension}>
+              <label htmlFor="extensionZip">App extension zip</label>
+              <input id="extensionZip" name="appZip" type="file" accept=".zip,application/zip" required />
+              <button type="submit" disabled={installingExtension}>
+                {installingExtension ? 'Installing...' : 'Install extension'}
+              </button>
+            </form>
           </div>
         ) : !joinedName ? (
           <form className="join-card" onSubmit={joinSpace}>
@@ -574,6 +613,13 @@ export function App() {
             ))}
           </ul>
         )}
+        <form className="extension-installer sidebar-installer" onSubmit={installExtension}>
+          <label htmlFor="sidebarExtensionZip">App extension zip</label>
+          <input id="sidebarExtensionZip" name="appZip" type="file" accept=".zip,application/zip" required />
+          <button type="submit" disabled={installingExtension}>
+            {installingExtension ? 'Installing...' : 'Install extension'}
+          </button>
+        </form>
       </aside>
     </main>
   );

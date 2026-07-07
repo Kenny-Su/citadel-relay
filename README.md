@@ -11,7 +11,7 @@ npm run dev
 
 The Vite client runs at `http://localhost:5173` and the Socket.IO/Express backend runs at `http://localhost:3001`.
 `npm run dev` regenerates the installed app catalog, then runs the server and client.
-This repo is empty by default: apps are normal installed package dependencies selected by `bundled-apps.json`.
+This repo uses local `file:` packages under `vendor/citadel-platform` for Citadel platform artifacts. Citadel package installs do not require the npm registry.
 
 ## Test And Build
 
@@ -27,7 +27,10 @@ Generated root and package `dist/` directories are build output and are not comm
 
 ## Apps
 
-This host starts with no apps installed. Adding apps does not require host code changes: install app packages, list them in `bundled-apps.json`, regenerate the catalog, and rebuild.
+This host starts with no bundled apps. Apps can be added in two ways:
+
+- Build-time bundled apps: add a local package dependency, list it in `bundled-apps.json`, regenerate the catalog, and rebuild.
+- Runtime extensions: upload a trusted built app zip from the host UI. The server stores it under `data/extensions` and enables it after restart.
 
 - Host owners: see [Adding Apps](docs/adding-apps.md).
 - App authors: see [Developing Apps](docs/developing-apps.md).
@@ -46,8 +49,9 @@ The server reads:
 - `PORT`: HTTP port, default `3001`.
 - `HOST`: bind host, default `0.0.0.0`.
 - `CLIENT_ORIGIN`: allowed Socket.IO browser origin, default `http://localhost:5173`.
-- `CITADEL_ENABLED_APPS`: comma-separated enabled app ids, defaulting to installed catalog order. With the default empty host, no apps are enabled.
+- `CITADEL_ENABLED_APPS`: comma-separated enabled app ids, defaulting to bundled plus installed extension apps.
 - `CITADEL_DB_PATH`: SQLite database path for app persistence, default `data/citadel.sqlite`.
+- `CITADEL_EXTENSIONS_DIR`: local extension storage directory, default `data/extensions`.
 
 ## Render Deployment
 

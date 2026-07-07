@@ -54,12 +54,12 @@ describe('bundled server app registry', () => {
 
   it('parses enabled app configuration against the empty installed catalog', () => {
     expect(getEnabledAppIds()).toEqual([]);
-    expect(getEnabledAppIds('alpha, beta')).toEqual([]);
+    expect(getEnabledAppIds('alpha, snake, beta')).toEqual([]);
   });
 
   it('filters server app bundles and manifests by enabled app ids', () => {
     expect(filterServerAppBundles(['alpha'])).toEqual([]);
-    expect(filterAppManifests(['alpha'])).toEqual([]);
-    expect(createBundledServerApps({ database, enabledAppIds: ['alpha'] })).toEqual([]);
+    expect(filterAppManifests(['snake'])).toEqual([]);
+    expect(createBundledServerApps({ database, enabledAppIds: ['snake'] })).toEqual([]);
   });
 });

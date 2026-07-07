@@ -53,6 +53,10 @@ function installedPackageJson(packageName: string) {
   return jsonSource<PackageJson>(join('node_modules', ...packageName.split('/'), 'package.json'));
 }
 
+function vendoredPackageJson(packageName: string) {
+  return jsonSource<PackageJson>(join('vendor/citadel-platform', packageName.replace('@citadel-platform/', ''), 'package.json'));
+}
+
 function packageExportEntries(packageJson: Pick<PackageJson, 'exports'>) {
   return Object.entries(packageJson.exports).map(([subpath, target]) => ({
     subpath,
@@ -103,13 +107,16 @@ describe('app package import boundaries', () => {
     expect(exists('scripts/local-external-apps.mjs')).toBe(false);
   });
 
-  it('keeps the host empty by default and platform as an installed dependency', () => {
+  it('uses local file Citadel packages instead of registry dependencies', () => {
     const rootPackage = jsonSource<PackageJson>('package.json');
-    const platformPackage = installedPackageJson('@citadel-platform/platform');
+    const platformPackage = vendoredPackageJson('@citadel-platform/platform');
+    const packageLock = source('package-lock.json');
 
     expect(rootPackage.workspaces).toBeUndefined();
-    expect(rootPackage.dependencies?.['@citadel-platform/platform']).toBe(platformPackage.version);
-    expect(Object.keys(rootPackage.dependencies ?? {}).filter((name) => name.startsWith('@citadel-platform/app-'))).toEqual([]);
+    expect(platformPackage.version).toBe('0.1.0');
+    expect(rootPackage.dependencies?.['@citadel-platform/platform']).toBe('file:vendor/citadel-platform/platform');
+    expect(rootPackage.dependencies?.['@citadel-platform/app-snake']).toBeUndefined();
+    expect(packageLock).not.toContain('registry.npmjs.org/@citadel-platform');
     expect(rootPackage.scripts).not.toHaveProperty('build:packages');
     expect(rootPackage.scripts).not.toHaveProperty('build:platform');
     expect(rootPackage.scripts).not.toHaveProperty('clean:packages');

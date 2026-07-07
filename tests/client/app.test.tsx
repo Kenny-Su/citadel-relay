@@ -34,11 +34,12 @@ describe('platform app shell', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders an empty host state when no apps are installed', async () => {
+  it('renders an empty host state with the extension installer', async () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'No apps installed' })).toBeInTheDocument();
-    expect(screen.getByText('Install an app package, add it to bundled-apps.json, then regenerate the app catalog.')).toBeInTheDocument();
+    expect(screen.getByText('Upload a built Citadel app extension, then restart the host to enable it.')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('App extension zip')).toHaveLength(2);
     expect(screen.queryByLabelText('Choose a display name')).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Apps' })).not.toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Participants' })).toBeInTheDocument();
