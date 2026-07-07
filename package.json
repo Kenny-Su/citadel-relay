@@ -2,9 +2,6 @@
   "name": "citadel-platform",
   "version": "0.1.0",
   "type": "module",
-  "engines": {
-    "node": ">=24.14.1 <25"
-  },
   "scripts": {
     "generate:bundled-apps": "node scripts/generate-bundled-apps.mjs",
     "check:bundled-apps": "node scripts/generate-bundled-apps.mjs --check",
@@ -12,8 +9,6 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite --host 0.0.0.0",
     "dev:server": "tsx watch src/server/index.ts",
-    "prestart": "npm run generate:bundled-apps",
-    "start": "tsx src/server/index.ts",
     "build": "npm run generate:bundled-apps && npm run typecheck && npm run build:client",
     "build:client": "vite build",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
@@ -21,7 +16,6 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "pretest": "npm run generate:bundled-apps",
     "test": "npm run check:bundled-apps && vitest run",
-    "test:production": "npm run build && vitest run tests/server/production.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

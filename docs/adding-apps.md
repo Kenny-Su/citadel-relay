@@ -52,14 +52,14 @@ npm run generate:bundled-apps
 npm run build
 ```
 
-For production, commit the changed `package.json`, `package-lock.json`, `bundled-apps.json`, and `src/bundledApps/generatedAppCatalog.ts`.
+Commit the changed `package.json`, `package-lock.json`, `bundled-apps.json`, and `src/bundledApps/generatedAppCatalog.ts`.
 
 ## Enable A Subset At Runtime
 
 `bundled-apps.json` decides which apps are installed into the host build. `CITADEL_ENABLED_APPS` can narrow that set at runtime by app id:
 
 ```bash
-CITADEL_ENABLED_APPS=chat,snake npm start
+CITADEL_ENABLED_APPS=chat,snake npm run dev:server
 ```
 
 Unknown ids are ignored. If nothing valid remains, the host falls back to the installed catalog order.
