@@ -1,6 +1,8 @@
-# Citadel Host
+# Citadel Relay
 
-A small real-time host for installable Citadel app packages. The host owns the platform runtime for identity, spaces, presence, Socket.IO routing, persistence helpers, and app protocol validation. Each app package owns its own state, events, UI, and persistence.
+A small raw WebSocket relay server for real-time spaces. Citadel owns network connections, participant identity, spaces, presence, and packet fan-out. External apps own their own UI, state machines, validation, persistence, and domain behavior.
+
+Citadel does not install apps, load app packages, run extension code, render a browser UI, or inspect app payloads.
 
 ## Local Development
 
@@ -9,38 +11,35 @@ npm install
 npm run dev
 ```
 
-The Vite client runs at `http://localhost:5173` and the Socket.IO/Express backend runs at `http://localhost:3001`.
-`npm run dev` regenerates the installed app catalog, then runs the server and client.
-Apps are installed as normal local packages or trusted extension zips. They follow the documented Citadel metadata/module protocol and do not need a shared Citadel SDK dependency.
+The HTTP server runs at `http://localhost:3001`.
+The WebSocket endpoint runs at `ws://localhost:3001/ws`.
 
 ## Test And Build
 
 ```bash
 npm test
-npm run build
+npm run typecheck
 ```
 
-Generated root and package `dist/` directories are build output and are not committed.
-`npm run generate:bundled-apps` validates each package listed in `bundled-apps.json` from `node_modules` and writes the generated catalog used by the client and server registries.
+`npm run build` runs the same typecheck used by CI-style verification.
 
-## Apps
+## Protocol
 
-This host starts with no bundled apps. Apps can be added in two ways:
+Clients connect to `/ws`, join a space, then exchange packets through Citadel:
 
-- Build-time bundled apps: add a local package dependency, list it in `bundled-apps.json`, regenerate the catalog, and rebuild.
-- Runtime extensions: upload a trusted built app zip from the host UI. The server stores it under `data/extensions` and enables it after restart.
+```json
+{ "type": "space:join", "spaceId": "general", "guestId": "stable-guest", "name": "Ada" }
+```
 
-- Host owners: see [Adding Apps](docs/adding-apps.md).
-- App authors: see [Developing Apps](docs/developing-apps.md).
-- Host platform maintainers: see [Developing The Host Platform](docs/developing-platform.md).
-- Package contract details: see [App Package Boundary](docs/app-package-boundary.md).
+```json
+{ "type": "space:packet", "topic": "chat", "payload": { "body": "hello" }, "target": "others" }
+```
+
+Citadel broadcasts packets to the current space without interpreting `payload`.
+See [Communication Protocol](docs/communication-protocol.md) for the full wire contract.
 
 ## Server Environment
 
 The server reads:
 
-- `PORT`: HTTP port, default `3001`.
-- `CLIENT_ORIGIN`: allowed Socket.IO browser origin, default `http://localhost:5173`.
-- `CITADEL_ENABLED_APPS`: comma-separated enabled app ids, defaulting to bundled plus installed extension apps.
-- `CITADEL_DB_PATH`: SQLite database path for app persistence, default `data/citadel.sqlite`.
-- `CITADEL_EXTENSIONS_DIR`: local extension storage directory, default `data/extensions`.
+- `PORT`: HTTP and WebSocket port, default `3001`.

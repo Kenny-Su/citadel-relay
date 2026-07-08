@@ -1,23 +1,19 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "baseUrl": ".",
     "types": ["node"],
     "ignoreDeprecations": "6.0",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx"
-  },
-  "include": ["src/client", "vitest.setup.ts"]
+    "noEmit": true
+  }
 }

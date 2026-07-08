@@ -4,49 +4,70 @@ export const SPACE_ID_MAX_LENGTH = 32;
 export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
 export const GUEST_ID_MAX_LENGTH = 80;
 export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-export const APP_ID_MAX_LENGTH = 64;
-export const APP_ID_PATTERN = /^[a-z0-9-]+$/;
 
-export type AppId = string;
+export type PacketTarget = 'space' | 'others';
 
 export type Participant = {
   id: string;
-  socketId?: string;
+  connectionId: string;
   name: string;
 };
 
-export type SpaceState<TAppState = unknown> = {
-  appId: AppId;
-  spaceId: string;
-  participants: Participant[];
-  appState: TAppState;
-};
-
-export type JoinSpacePayload = {
-  appId: AppId;
+export type JoinSpaceMessage = {
+  type: 'space:join';
   spaceId?: string;
   guestId?: string;
   name: string;
 };
 
-export type PlatformErrorPayload = {
-  message: string;
+export type SpacePacketMessage<TPayload = unknown> = {
+  type: 'space:packet';
+  topic?: string;
+  payload?: TPayload;
+  target?: PacketTarget;
+};
+
+export type LeaveSpaceMessage = {
+  type: 'space:leave';
+};
+
+export type ClientMessage<TPayload = unknown> =
+  | JoinSpaceMessage
+  | SpacePacketMessage<TPayload>
+  | LeaveSpaceMessage;
+
+export type SpaceStateMessage = {
+  type: 'space:state';
+  spaceId: string;
+  participants: Participant[];
 };
 
 export type ParticipantEvent = {
-  id: string;
   type: 'participant:joined' | 'participant:left';
-  appId: AppId;
   spaceId: string;
   participant: Participant;
   createdAt: string;
 };
 
-export type AppEventEnvelope<TPayload = unknown> = {
-  appId: AppId;
-  type: string;
+export type RelayPacketMessage<TPayload = unknown> = {
+  type: 'space:packet';
+  spaceId: string;
+  from: Participant;
+  topic?: string;
   payload?: TPayload;
+  createdAt: string;
 };
+
+export type RelayErrorMessage = {
+  type: 'error:notice';
+  message: string;
+};
+
+export type ServerMessage<TPayload = unknown> =
+  | SpaceStateMessage
+  | ParticipantEvent
+  | RelayPacketMessage<TPayload>
+  | RelayErrorMessage;
 
 export function normalizeSpaceId(input: unknown): string {
   if (typeof input !== 'string') {
@@ -60,15 +81,6 @@ export function normalizeSpaceId(input: unknown): string {
   }
 
   return value;
-}
-
-export function isAppId(value: unknown): value is AppId {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= APP_ID_MAX_LENGTH &&
-    APP_ID_PATTERN.test(value)
-  );
 }
 
 export function normalizeGuestId(input: unknown, fallback: string): string {

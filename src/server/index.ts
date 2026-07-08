@@ -1,13 +1,10 @@
-import { createCitadelServer } from './citadelServer.js';
+import { createRelayServer } from '../relay/server.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
 
-const { httpServer } = await createCitadelServer({
-  clientOrigin: CLIENT_ORIGIN,
-  enabledAppIdsInput: process.env.CITADEL_ENABLED_APPS
-});
+const { httpServer } = createRelayServer();
 
 httpServer.listen(PORT, () => {
-  console.log(`Citadel platform listening on http://localhost:${PORT}`);
+  console.log(`Citadel relay listening on http://localhost:${PORT}`);
+  console.log(`WebSocket endpoint available at ws://localhost:${PORT}/ws`);
 });
