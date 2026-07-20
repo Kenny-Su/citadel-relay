@@ -8,6 +8,7 @@ export {
   normalizeGuestId,
   normalizeSpaceId,
   type ClientMessage,
+  type ConnectionTarget,
   type JoinSpaceMessage,
   type LeaveSpaceMessage,
   type PacketTarget,

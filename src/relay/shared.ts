@@ -5,7 +5,11 @@ export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
 export const GUEST_ID_MAX_LENGTH = 80;
 export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-export type PacketTarget = 'space' | 'others';
+export type ConnectionTarget = {
+  connectionId: string;
+};
+
+export type PacketTarget = 'space' | 'others' | ConnectionTarget;
 
 export type Participant = {
   id: string;

@@ -37,7 +37,7 @@ Send an app-owned packet:
   type: 'space:packet';
   topic?: string;
   payload?: unknown;
-  target?: 'space' | 'others';
+  target?: 'space' | 'others' | { connectionId: string };
 }
 ```
 
@@ -100,5 +100,6 @@ Error notice:
 - `target: 'space'` broadcasts to everyone in the space, including the sender.
 - `target: 'others'` broadcasts to everyone in the space except the sender.
 - Missing `target` defaults to `space`.
+- A connection target unicasts to that connection only when it belongs to the sender's current space.
 - Citadel validates only the relay envelope. Payload shape and meaning are app-owned.
 - Relay state is in memory and disappears when the server process exits.

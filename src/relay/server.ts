@@ -81,6 +81,12 @@ export function createRelayServer() {
     }
   }
 
+  function findSpaceSocket(spaceId: string, connectionId: string) {
+    return [...getSpaceSockets(spaceId)].find(
+      (candidate) => sessions.get(candidate)?.participant.connectionId === connectionId
+    );
+  }
+
   function emitSpaceState(spaceId: string) {
     broadcast(spaceId, {
       type: 'space:state',
@@ -180,13 +186,18 @@ export function createRelayServer() {
       return;
     }
 
+    const requestedTarget = message.target;
+    const validConnectionTarget = isRecord(requestedTarget)
+      && typeof requestedTarget.connectionId === 'string'
+      && requestedTarget.connectionId.length > 0
+      && requestedTarget.connectionId.length <= 128;
     if (
-      'target' in message
-      && message.target !== undefined
-      && message.target !== 'space'
-      && message.target !== 'others'
+      requestedTarget !== undefined
+      && requestedTarget !== 'space'
+      && requestedTarget !== 'others'
+      && !validConnectionTarget
     ) {
-      sendError(socket, 'Packet target must be "space" or "others".');
+      sendError(socket, 'Packet target must be "space", "others", or a connection target.');
       return;
     }
 
@@ -209,6 +220,16 @@ export function createRelayServer() {
 
     if ('topic' in message) {
       outbound.topic = message.topic;
+    }
+
+    if (typeof target === 'object') {
+      const recipient = findSpaceSocket(session.spaceId, target.connectionId);
+      if (!recipient) {
+        sendError(socket, 'Packet target is not connected to this space.');
+        return;
+      }
+      send(recipient, outbound);
+      return;
     }
 
     broadcast(session.spaceId, outbound, target === 'others' ? { except: socket } : undefined);

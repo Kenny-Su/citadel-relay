@@ -188,6 +188,58 @@ describe('citadel relay websocket server', () => {
     expect(await othersForAda).toBeNull();
   });
 
+  it('unicasts packets to one connection in the sender space', async () => {
+    const ada = await connectClient();
+    const grace = await connectClient();
+    const linus = await connectClient();
+
+    await joinSpace(ada, 'Ada', 'general');
+    const graceState = await joinSpace(grace, 'Grace', 'general');
+    await joinSpace(linus, 'Linus', 'general');
+    const graceConnectionId = graceState.participants.find(({ name }) => name === 'Grace')?.connectionId;
+    expect(graceConnectionId).toBeDefined();
+
+    const forGrace = waitForMessage<RelayPacketMessage>(grace, 'space:packet');
+    const forAda = Promise.race([
+      waitForMessage<RelayPacketMessage>(ada, 'space:packet'),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 50))
+    ]);
+    const forLinus = Promise.race([
+      waitForMessage<RelayPacketMessage>(linus, 'space:packet'),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 50))
+    ]);
+    sendJson(ada, {
+      type: 'space:packet',
+      topic: 'private',
+      payload: 'only grace',
+      target: { connectionId: graceConnectionId }
+    });
+
+    expect((await forGrace).payload).toBe('only grace');
+    expect(await forAda).toBeNull();
+    expect(await forLinus).toBeNull();
+  });
+
+  it('rejects unicast targets outside the sender space', async () => {
+    const ada = await connectClient();
+    const linus = await connectClient();
+    await joinSpace(ada, 'Ada', 'design');
+    const linusState = await joinSpace(linus, 'Linus', 'infra');
+    const linusConnectionId = linusState.participants[0].connectionId;
+    const error = waitForMessage<RelayErrorMessage>(ada, 'error:notice');
+
+    sendJson(ada, {
+      type: 'space:packet',
+      target: { connectionId: linusConnectionId },
+      payload: 'must not cross spaces'
+    });
+
+    expect(await error).toEqual({
+      type: 'error:notice',
+      message: 'Packet target is not connected to this space.'
+    });
+  });
+
   it('broadcasts participant leave on explicit leave and disconnect', async () => {
     const ada = await connectClient();
     const grace = await connectClient();
@@ -264,7 +316,7 @@ describe('citadel relay websocket server', () => {
     });
     expect(await invalidTarget).toEqual({
       type: 'error:notice',
-      message: 'Packet target must be "space" or "others".'
+      message: 'Packet target must be "space", "others", or a connection target.'
     });
   });
 

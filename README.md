@@ -35,7 +35,13 @@ Clients connect to `/ws`, join a space, then exchange packets through Citadel:
 { "type": "space:packet", "topic": "chat", "payload": { "body": "hello" }, "target": "others" }
 ```
 
-Citadel broadcasts packets to the current space without interpreting `payload`.
+Packets can target the full space, everyone except the sender, or one connection in the sender's current space:
+
+```json
+{ "type": "space:packet", "topic": "command", "payload": {}, "target": { "connectionId": "recipient-connection-id" } }
+```
+
+Citadel routes packets without interpreting `payload`.
 See [Communication Protocol](docs/communication-protocol.md) for the full wire contract.
 
 ## Server Environment
