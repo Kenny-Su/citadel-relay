@@ -44,8 +44,19 @@ Packets can target the full space, everyone except the sender, or one connection
 Citadel routes packets without interpreting `payload`.
 See [Communication Protocol](docs/communication-protocol.md) for the full wire contract.
 
+## Traffic diagnostics
+
+Traffic logging is disabled by default. To record structured JSON Lines routing summaries:
+
+```bash
+RELAY_TRAFFIC_LOG=summary npm run dev
+```
+
+Summaries contain message type, topic, space and connection IDs, byte counts, routing target, and WebSocket buffered bytes. Set `RELAY_TRAFFIC_LOG=payload` only when complete opaque application payloads are required; payload mode is substantially noisier and may expose application data.
+
 ## Server Environment
 
 The server reads:
 
 - `PORT`: HTTP and WebSocket port, default `3001`.
+- `RELAY_TRAFFIC_LOG`: `summary` or `payload`; unset/other values disable traffic logging.

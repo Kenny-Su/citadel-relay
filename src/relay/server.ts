@@ -16,6 +16,7 @@ import {
 } from './shared.js';
 import { validateDisplayName } from './validation.js';
 import { RELAY_VERSION } from './version.js';
+import { createTrafficLogger } from './trafficLog.js';
 
 type ParticipantSession = {
   spaceId: string;
@@ -44,13 +45,28 @@ export function createRelayServer() {
   const connections = new Map<WebSocket, ConnectionRecord>();
   const sessions = new Map<WebSocket, ParticipantSession>();
   const spaces = new Map<string, Set<WebSocket>>();
+  const traffic = createTrafficLogger();
 
   function send(socket: WebSocket, message: ServerMessage) {
     if (socket.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    socket.send(JSON.stringify(message));
+    const serialized = JSON.stringify(message);
+    socket.send(serialized);
+    if (traffic.enabled) {
+      const recipient = sessions.get(socket);
+      traffic.log({
+        event: 'send',
+        messageType: message.type,
+        topic: message.type === 'space:packet' ? message.topic : undefined,
+        spaceId: 'spaceId' in message ? message.spaceId : recipient?.spaceId,
+        toConnectionId: recipient?.participant.connectionId ?? connections.get(socket)?.connectionId,
+        fromConnectionId: message.type === 'space:packet' ? message.from.connectionId : undefined,
+        bytes: Buffer.byteLength(serialized),
+        bufferedBytes: socket.bufferedAmount
+      }, message.type === 'space:packet' ? message.payload : undefined);
+    }
   }
 
   function sendError(socket: WebSocket, message: string) {
@@ -260,6 +276,25 @@ export function createRelayServer() {
       return;
     }
 
+    if (traffic.enabled) {
+      const session = sessions.get(socket);
+      traffic.log({
+        event: 'receive',
+        messageType: message.type,
+        topic: message.type === 'space:packet' ? message.topic : undefined,
+        spaceId: message.type === 'space:join' ? message.spaceId : session?.spaceId,
+        fromConnectionId: session?.participant.connectionId ?? connections.get(socket)?.connectionId,
+        target: message.type === 'space:packet'
+          ? typeof message.target === 'object' ? 'connection' : message.target ?? 'space'
+          : undefined,
+        targetConnectionId: message.type === 'space:packet' && typeof message.target === 'object'
+          ? message.target.connectionId
+          : undefined,
+        bytes: Buffer.byteLength(data.toString()),
+        bufferedBytes: socket.bufferedAmount
+      }, message.type === 'space:packet' ? message.payload : undefined);
+    }
+
     if (message.type === 'space:join') {
       handleJoin(socket, message);
       return;
@@ -304,12 +339,21 @@ export function createRelayServer() {
     connections.set(socket, {
       connectionId: nanoid()
     });
+    if (traffic.enabled) traffic.log({
+      event: 'socket-open',
+      connectionId: connections.get(socket)?.connectionId
+    });
 
     socket.on('message', (data) => {
       handleMessage(socket, data);
     });
 
     socket.on('close', () => {
+      if (traffic.enabled) traffic.log({
+        event: 'socket-close',
+        connectionId: sessions.get(socket)?.participant.connectionId ?? connections.get(socket)?.connectionId,
+        spaceId: sessions.get(socket)?.spaceId
+      });
       leaveCurrentSpace(socket);
       sessions.delete(socket);
       connections.delete(socket);
