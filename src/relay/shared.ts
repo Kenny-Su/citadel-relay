@@ -1,9 +1,3 @@
-export const DISPLAY_NAME_MAX_LENGTH = 24;
-export const DEFAULT_SPACE_ID = 'general';
-export const SPACE_ID_MAX_LENGTH = 32;
-export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
-export const GUEST_ID_MAX_LENGTH = 80;
-export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 export const NAMESPACE_MAX_LENGTH = 128;
 export const NAMESPACE_PATTERN = /^\/[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -19,13 +13,7 @@ export type ConnectionTarget = {
   connectionId: string;
 };
 
-export type PacketTarget = 'space' | 'others' | ConnectionTarget;
-
-export type Participant = {
-  id: string;
-  connectionId: string;
-  name: string;
-};
+export type ClientState = 'pending' | 'admitted';
 
 export type AuthenticateMessage = {
   type: 'auth:authenticate';
@@ -42,31 +30,58 @@ export type ReleaseNamespaceMessage = {
   namespace: string;
 };
 
-export type JoinSpaceMessage = {
-  type: 'space:join';
-  spaceId?: string;
-  guestId?: string;
-  name: string;
+export type OpenNamespaceMessage<THello = unknown> = {
+  type: 'namespace:open';
+  namespace: string;
+  hello?: THello;
 };
 
-export type SpacePacketMessage<TPayload = unknown> = {
-  type: 'space:packet';
-  topic?: string;
+export type CloseNamespaceMessage = {
+  type: 'namespace:close';
+};
+
+export type AcceptNamespaceClientMessage = {
+  type: 'namespace:accept';
+  requestId: string;
+};
+
+export type RejectNamespaceClientMessage = {
+  type: 'namespace:reject';
+  requestId: string;
+  message?: string;
+};
+
+export type RevokeNamespaceClientMessage = {
+  type: 'namespace:revoke';
+  connectionId: string;
+  message?: string;
+};
+
+export type ClientPacketMessage<TPayload = unknown> = {
+  type: 'client:packet';
   payload?: TPayload;
-  target?: PacketTarget;
 };
 
-export type LeaveSpaceMessage = {
-  type: 'space:leave';
+export type ServerPacketTarget = 'all' | ConnectionTarget;
+
+export type ServerPacketMessage<TPayload = unknown> = {
+  type: 'server:packet';
+  namespace: string;
+  target: ServerPacketTarget;
+  payload?: TPayload;
 };
 
 export type ClientMessage<TPayload = unknown> =
   | AuthenticateMessage
   | ClaimNamespaceMessage
   | ReleaseNamespaceMessage
-  | JoinSpaceMessage
-  | SpacePacketMessage<TPayload>
-  | LeaveSpaceMessage;
+  | OpenNamespaceMessage
+  | CloseNamespaceMessage
+  | AcceptNamespaceClientMessage
+  | RejectNamespaceClientMessage
+  | RevokeNamespaceClientMessage
+  | ClientPacketMessage<TPayload>
+  | ServerPacketMessage<TPayload>;
 
 export type AuthenticationStateMessage = {
   type: 'auth:state';
@@ -78,26 +93,44 @@ export type NamespaceClaimedMessage = {
   namespace: string;
 };
 
-export type SpaceStateMessage = {
-  type: 'space:state';
-  spaceId: string;
-  participants: Participant[];
+export type NamespaceClientStateMessage = {
+  type: 'namespace:state';
+  namespace: string;
+  state: 'pending' | 'admitted' | 'rejected' | 'closed';
+  connectionId: string;
+  message?: string;
 };
 
-export type ParticipantEvent = {
-  type: 'participant:joined' | 'participant:left';
-  spaceId: string;
-  participant: Participant;
-  createdAt: string;
+export type NamespaceConnectMessage<THello = unknown> = {
+  type: 'namespace:connect';
+  requestId: string;
+  namespace: string;
+  connectionId: string;
+  hello?: THello;
 };
 
-export type RelayPacketMessage<TPayload = unknown> = {
-  type: 'space:packet';
-  spaceId: string;
-  from: Participant;
-  topic?: string;
+export type NamespaceDisconnectMessage = {
+  type: 'namespace:disconnect';
+  namespace: string;
+  connectionId: string;
+  admitted: boolean;
+  reason: 'client-closed' | 'client-disconnected' | 'admission-timeout';
+};
+
+export type RelayClientPacketMessage<TPayload = unknown> = {
+  type: 'client:packet';
+  namespace: string;
+  from: {
+    connectionId: string;
+    state: ClientState;
+  };
   payload?: TPayload;
-  createdAt: string;
+};
+
+export type RelayServerPacketMessage<TPayload = unknown> = {
+  type: 'server:packet';
+  namespace: string;
+  payload?: TPayload;
 };
 
 export type RelayErrorMessage = {
@@ -108,38 +141,12 @@ export type RelayErrorMessage = {
 export type ServerMessage<TPayload = unknown> =
   | AuthenticationStateMessage
   | NamespaceClaimedMessage
-  | SpaceStateMessage
-  | ParticipantEvent
-  | RelayPacketMessage<TPayload>
+  | NamespaceClientStateMessage
+  | NamespaceConnectMessage
+  | NamespaceDisconnectMessage
+  | RelayClientPacketMessage<TPayload>
+  | RelayServerPacketMessage<TPayload>
   | RelayErrorMessage;
-
-export function normalizeSpaceId(input: unknown): string {
-  if (typeof input !== 'string') {
-    return DEFAULT_SPACE_ID;
-  }
-
-  const value = input.trim().toLowerCase();
-
-  if (!value || value.length > SPACE_ID_MAX_LENGTH || !SPACE_ID_PATTERN.test(value)) {
-    return DEFAULT_SPACE_ID;
-  }
-
-  return value;
-}
-
-export function normalizeGuestId(input: unknown, fallback: string): string {
-  if (typeof input !== 'string') {
-    return fallback;
-  }
-
-  const value = input.trim();
-
-  if (!value || value.length > GUEST_ID_MAX_LENGTH || !GUEST_ID_PATTERN.test(value)) {
-    return fallback;
-  }
-
-  return value;
-}
 
 export function isNamespace(value: unknown): value is string {
   return typeof value === 'string'

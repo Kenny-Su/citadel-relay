@@ -1,20 +1,19 @@
 # Developing The Relay Server
 
-The reusable relay contracts and runtime live under `src/relay`.
+The reusable router lives under `src/relay`:
 
-Use this area when changing:
+- `app.ts` and `shared.ts`: public asymmetric routing contract.
+- `auth.ts`: app-owner PSK configuration and authentication.
+- `server.ts`: namespace claims, pending tunnels, admission state, and packet routing.
+- `trafficLog.ts`: opt-in routing diagnostics.
 
-- Wire message types and helpers in `src/relay/app.ts` and `src/relay/shared.ts`.
-- App-owner PSK authentication in `src/relay/auth.ts`.
-- Display name and space validation in `src/relay/validation.ts`.
-- The Express and raw WebSocket runtime in `src/relay/server.ts`.
-- Process startup in `src/server/index.ts`.
+Process startup lives in `src/server/index.ts`. The untracked `relay.config.json` contains app-owner keys and exact claimed paths.
 
-Verify relay changes from this repo:
+Verify changes with:
 
 ```bash
 npm run typecheck
 npm test
 ```
 
-Keep app ACLs, UI, state, validation, persistence, and domain rules outside this server. The relay only authenticates configured owners and records exact namespace claims.
+Keep browser identity, ACLs, subrooms, presence, app validation, persistence, and domain behavior in namespace owners. The relay should only authenticate owners and route opaque traffic across exact first-level boundaries.

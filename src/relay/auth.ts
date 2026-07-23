@@ -45,7 +45,9 @@ export function createPreSharedKeyAuthenticator(config: PreSharedKeyConfig): Rel
 
     let matchedPrincipal: AuthenticatedPrincipal | null = null;
     for (const entry of entries) {
-      if (timingSafeEqual(presentedKey, entry.key)) matchedPrincipal = entry.principal;
+      if (timingSafeEqual(presentedKey, entry.key)) {
+        matchedPrincipal = entry.principal;
+      }
     }
     return matchedPrincipal;
   };
@@ -53,11 +55,13 @@ export function createPreSharedKeyAuthenticator(config: PreSharedKeyConfig): Rel
 
 export function parsePreSharedKeyConfig(input: string): PreSharedKeyConfig {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(input);
   } catch {
     throw new Error('Relay config must be valid JSON.');
   }
+
   return validatePreSharedKeyConfig(parsed);
 }
 
@@ -68,50 +72,78 @@ export function validatePreSharedKeyConfig(input: unknown): PreSharedKeyConfig {
 
   const names = new Set<string>();
   const keys = new Set<string>();
-  const paths = new Set<string>();
+  const claimedPaths = new Set<string>();
   const apps = input.apps.map((value): AppOwnerConfig => {
-    if (!isRecord(value)) throw new Error('Each pre-shared-key app must be an object.');
-    const principal = validateAuthenticatedPrincipal({ id: value.name, name: value.name });
+    if (!isRecord(value)) {
+      throw new Error('Each pre-shared-key app must be an object.');
+    }
+
+    const principal = validateAuthenticatedPrincipal({
+      id: value.name,
+      name: value.name
+    });
     const preSharedKey = value.preSharedKey;
     const claimedPath = value.claimedPath;
 
     if (typeof preSharedKey !== 'string' || !decodePreSharedKey(preSharedKey)) {
-      throw new Error('Pre-shared keys must be 32 random bytes encoded as lowercase hexadecimal.');
+      throw new Error(
+        `Pre-shared keys must be ${PRE_SHARED_KEY_BYTES} random bytes encoded as lowercase hexadecimal.`
+      );
     }
+
     if (!isNamespace(claimedPath)) {
-      throw new Error('Claimed paths must be first-level lowercase paths such as "/chat".');
+      throw new Error('Claimed paths must be absolute lowercase namespace paths such as "/chat".');
     }
-    if (names.has(principal.id)) throw new Error(`Duplicate app name: ${principal.id}`);
-    if (keys.has(preSharedKey)) throw new Error('Each app must have a unique pre-shared key.');
-    if (paths.has(claimedPath)) throw new Error(`Claimed path is assigned more than once: ${claimedPath}`);
+
+    if (names.has(principal.id)) {
+      throw new Error(`Duplicate app name: ${principal.id}`);
+    }
+    if (keys.has(preSharedKey)) {
+      throw new Error('Each app must have a unique pre-shared key.');
+    }
+    if (claimedPaths.has(claimedPath)) {
+      throw new Error(`Claimed path is assigned more than once: ${claimedPath}`);
+    }
 
     names.add(principal.id);
     keys.add(preSharedKey);
-    paths.add(claimedPath);
-    return { name: principal.id, preSharedKey, claimedPath };
+    claimedPaths.add(claimedPath);
+
+    return {
+      name: principal.id,
+      preSharedKey,
+      claimedPath
+    };
   });
+
   return { apps };
 }
 
 export function validateAuthenticatedPrincipal(input: unknown): AuthenticatedPrincipal {
-  if (!isRecord(input)) throw new Error('Authentication must return a principal object.');
+  if (!isRecord(input)) {
+    throw new Error('Authentication must return a principal object.');
+  }
+
   if (
     typeof input.id !== 'string'
     || input.id.length === 0
     || input.id.length > PRINCIPAL_ID_MAX_LENGTH
     || /[\u0000-\u001f\u007f]/.test(input.id)
   ) {
-    throw new Error('Principal ids must be non-empty strings without control characters.');
+    throw new Error(`Principal ids must be between 1 and ${PRINCIPAL_ID_MAX_LENGTH} characters without control characters.`);
   }
+
   if (input.name !== undefined && typeof input.name !== 'string') {
     throw new Error('Principal names must be strings when present.');
   }
+
   if (
     input.namespaceClaims !== undefined
     && (!Array.isArray(input.namespaceClaims) || !input.namespaceClaims.every(isNamespace))
   ) {
     throw new Error('Principal namespace claims must be valid namespace paths.');
   }
+
   return {
     id: input.id,
     ...(input.name !== undefined ? { name: input.name } : {}),
@@ -124,7 +156,9 @@ function decodePreSharedKey(value: unknown) {
     typeof value !== 'string'
     || value.length !== PRE_SHARED_KEY_ENCODED_LENGTH
     || !PRE_SHARED_KEY_PATTERN.test(value)
-  ) return null;
+  ) {
+    return null;
+  }
 
   const decoded = Buffer.from(value, 'hex');
   return decoded.length === PRE_SHARED_KEY_BYTES && decoded.toString('hex') === value

@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as relayContract from '../../src/relay/app.js';
 import * as serverRuntime from '../../src/relay/server.js';
-import * as validationContract from '../../src/relay/validation.js';
 
 type PackageJson = {
   name: string;
@@ -34,8 +33,8 @@ describe('relay server import boundaries', () => {
     expect(exists('src/relay/app.ts')).toBe(true);
     expect(exists('src/relay/server.ts')).toBe(true);
     expect(exists('src/relay/shared.ts')).toBe(true);
-    expect(exists('src/relay/validation.ts')).toBe(true);
     expect(exists('src/relay/auth.ts')).toBe(true);
+    expect(exists('src/relay/validation.ts')).toBe(false);
 
     expect(exists('src/client')).toBe(false);
     expect(exists('src/bundledApps')).toBe(false);
@@ -77,37 +76,30 @@ describe('relay server import boundaries', () => {
   it('exports relay contracts and runtime values', () => {
     expect(sortedExportKeys(relayContract)).toEqual([
       'AUTH_TOKEN_MAX_LENGTH',
-      'DEFAULT_SPACE_ID',
-      'DISPLAY_NAME_MAX_LENGTH',
-      'GUEST_ID_MAX_LENGTH',
-      'GUEST_ID_PATTERN',
       'NAMESPACE_MAX_LENGTH',
       'NAMESPACE_PATTERN',
       'PRE_SHARED_KEY_BYTES',
       'PRE_SHARED_KEY_ENCODED_LENGTH',
       'PRINCIPAL_ID_MAX_LENGTH',
-      'SPACE_ID_MAX_LENGTH',
-      'SPACE_ID_PATTERN',
       'createPreSharedKeyAuthenticator',
       'isNamespace',
-      'normalizeGuestId',
-      'normalizeSpaceId',
       'parsePreSharedKeyConfig',
       'validateAuthenticatedPrincipal',
       'validatePreSharedKeyConfig'
     ].sort());
     expect(sortedExportKeys(serverRuntime)).toEqual(['createRelayServer']);
-    expect(sortedExportKeys(validationContract)).toEqual(['validateDisplayName']);
   });
 
-  it('documents a network-only relay protocol instead of installable apps', () => {
+  it('documents an authenticated namespace relay instead of installable apps', () => {
     const readme = source('README.md');
     const protocol = source('docs/communication-protocol.md');
 
-    expect(readme).toContain('raw WebSocket relay');
-    expect(protocol).toContain('namespace:claim');
+    expect(readme).toContain('authenticated first-level namespace router');
     expect(protocol).toContain('WebSocket endpoint');
     expect(protocol).toContain('/ws');
+    expect(protocol).toContain('namespace owner');
+    expect(protocol).toContain('namespace:accept');
+    expect(protocol).toContain('server:packet');
     expect(readme).not.toContain('bundled apps');
     expect(protocol).not.toContain('installed app catalog');
   });

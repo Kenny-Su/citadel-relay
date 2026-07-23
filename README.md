@@ -1,16 +1,26 @@
 # Citadel Relay
 
-A raw WebSocket relay for real-time spaces, now with authenticated app-owner namespace claims. Existing browser space traffic remains unchanged in `0.2.0`; app servers can authenticate with a 256-bit pre-shared key and exclusively register an exact first-level path such as `/chat`.
+Citadel is an authenticated first-level namespace router. App servers authenticate with pre-shared keys and exclusively claim paths such as `/chat`. Browsers connect anonymously to the relay, open a pending tunnel to an owner, and let that app perform its own authentication and ACL checks.
 
-## App Owner Configuration
+All traffic still passes through Citadel. Clients can send packets only upstream to their namespace owner. Only the authenticated owner can unicast or broadcast downstream.
 
-Generate a key:
+Citadel does not own browser identity, app ACLs, subrooms, presence, payload validation, persistence, or domain behavior.
+
+## Local Development
+
+Create a 256-bit app-owner key:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Copy `relay.config.example.json` to the Git-ignored `relay.config.json` and replace the placeholder:
+Copy the example and replace its placeholder with the generated 64-character lowercase hexadecimal value:
+
+```bash
+cp relay.config.example.json relay.config.json
+npm install
+npm run dev
+```
 
 ```json
 {
@@ -24,7 +34,13 @@ Copy `relay.config.example.json` to the Git-ignored `relay.config.json` and repl
 }
 ```
 
-App owners authenticate and claim their configured path:
+`relay.config.json` is ignored by Git. App names, keys, and claimed paths must be unique. Claimed paths are exact, first-level lowercase paths.
+
+The HTTP server runs at `http://localhost:3001`. The WebSocket endpoint is `ws://localhost:3001/ws`.
+
+## Routing Model
+
+The Chat server authenticates and claims its configured path:
 
 ```json
 { "type": "auth:authenticate", "token": "app-owner-psk" }
@@ -34,40 +50,50 @@ App owners authenticate and claim their configured path:
 { "type": "namespace:claim", "namespace": "/chat" }
 ```
 
-Names, keys, and claimed paths must be unique. Paths are exact and first-level.
-
-## Local Development
-
-```bash
-npm install
-npm run dev
-```
-
-The HTTP server runs at `http://localhost:3001`; the WebSocket endpoint is `ws://localhost:3001/ws`.
-
-## Existing Space Protocol
-
-Unauthenticated browser clients can continue to join spaces and exchange opaque packets:
+A browser does not authenticate to Citadel. It opens `/chat` with optional opaque app handshake data:
 
 ```json
-{ "type": "space:join", "spaceId": "general", "guestId": "stable-guest", "name": "Ada" }
+{
+  "type": "namespace:open",
+  "namespace": "/chat",
+  "hello": { "resumeToken": null }
+}
 ```
 
-```json
-{ "type": "space:packet", "topic": "chat", "payload": { "body": "hello" }, "target": "others" }
+The relay gives the owner a pending connection. Pending client packets and owner unicasts form a restricted handshake tunnel. The Chat server applies its ACL and responds with `namespace:accept` or `namespace:reject`.
+
+After acceptance:
+
+```text
+Browser A → Relay → Chat server → Relay → Browser B
 ```
 
-See [Communication Protocol](docs/communication-protocol.md).
+- Browsers send `client:packet`; the relay adds their trusted connection ID and sends only to the owner.
+- Owners send `server:packet`; `target: "all"` reaches admitted clients and a connection target performs unicast.
+- A client cannot target another client or request a broadcast.
+- The owner can revoke a client at any time.
 
-## Verification
+See [Communication Protocol](docs/communication-protocol.md) for the complete wire contract.
+
+## Test And Build
 
 ```bash
-npm run typecheck
 npm test
+npm run typecheck
 ```
 
-## Environment
+## Traffic Diagnostics
 
-- `PORT`: server port, default `3001`.
-- `RELAY_CONFIG_PATH`: app-owner config, default `relay.config.json`.
-- `RELAY_TRAFFIC_LOG`: `summary` or `payload`.
+Traffic logging is disabled by default:
+
+```bash
+RELAY_TRAFFIC_LOG=summary npm run dev
+```
+
+Summaries contain routing metadata but never authentication keys. `RELAY_TRAFFIC_LOG=payload` additionally records opaque app payloads and may expose app data.
+
+## Server Environment
+
+- `PORT`: HTTP and WebSocket port, default `3001`.
+- `RELAY_CONFIG_PATH`: PSK app-owner config, default `relay.config.json`.
+- `RELAY_TRAFFIC_LOG`: `summary` or `payload`; other values disable logging.
