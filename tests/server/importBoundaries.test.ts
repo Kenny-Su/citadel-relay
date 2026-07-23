@@ -35,6 +35,7 @@ describe('relay server import boundaries', () => {
     expect(exists('src/relay/server.ts')).toBe(true);
     expect(exists('src/relay/shared.ts')).toBe(true);
     expect(exists('src/relay/validation.ts')).toBe(true);
+    expect(exists('src/relay/auth.ts')).toBe(true);
 
     expect(exists('src/client')).toBe(false);
     expect(exists('src/bundledApps')).toBe(false);
@@ -75,14 +76,25 @@ describe('relay server import boundaries', () => {
 
   it('exports relay contracts and runtime values', () => {
     expect(sortedExportKeys(relayContract)).toEqual([
+      'AUTH_TOKEN_MAX_LENGTH',
       'DEFAULT_SPACE_ID',
       'DISPLAY_NAME_MAX_LENGTH',
       'GUEST_ID_MAX_LENGTH',
       'GUEST_ID_PATTERN',
+      'NAMESPACE_MAX_LENGTH',
+      'NAMESPACE_PATTERN',
+      'PRE_SHARED_KEY_BYTES',
+      'PRE_SHARED_KEY_ENCODED_LENGTH',
+      'PRINCIPAL_ID_MAX_LENGTH',
       'SPACE_ID_MAX_LENGTH',
       'SPACE_ID_PATTERN',
+      'createPreSharedKeyAuthenticator',
+      'isNamespace',
       'normalizeGuestId',
-      'normalizeSpaceId'
+      'normalizeSpaceId',
+      'parsePreSharedKeyConfig',
+      'validateAuthenticatedPrincipal',
+      'validatePreSharedKeyConfig'
     ].sort());
     expect(sortedExportKeys(serverRuntime)).toEqual(['createRelayServer']);
     expect(sortedExportKeys(validationContract)).toEqual(['validateDisplayName']);
@@ -92,7 +104,8 @@ describe('relay server import boundaries', () => {
     const readme = source('README.md');
     const protocol = source('docs/communication-protocol.md');
 
-    expect(readme).toContain('raw WebSocket relay server');
+    expect(readme).toContain('raw WebSocket relay');
+    expect(protocol).toContain('namespace:claim');
     expect(protocol).toContain('WebSocket endpoint');
     expect(protocol).toContain('/ws');
     expect(readme).not.toContain('bundled apps');

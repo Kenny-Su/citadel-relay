@@ -1,5 +1,6 @@
 node_modules/
 dist/
 .env
+relay.config.json
 .DS_Store
 npm-debug.log*

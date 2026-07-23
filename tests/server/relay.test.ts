@@ -3,7 +3,14 @@ import type { Server as HttpServer } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { createRelayServer } from '../../src/relay/server.js';
-import type { RelayErrorMessage, RelayPacketMessage, ServerMessage, SpaceStateMessage } from '../../src/relay/app.js';
+import type {
+  AuthenticationStateMessage,
+  NamespaceClaimedMessage,
+  RelayErrorMessage,
+  RelayPacketMessage,
+  ServerMessage,
+  SpaceStateMessage
+} from '../../src/relay/app.js';
 
 function waitForOpen(socket: WebSocket) {
   return new Promise<void>((resolve, reject) => {
@@ -65,7 +72,13 @@ describe('citadel relay websocket server', () => {
   const clients: WebSocket[] = [];
 
   beforeEach(async () => {
-    server = createRelayServer();
+    server = createRelayServer({
+      authenticateOwner(token) {
+        return token === 'chat-owner-key'
+          ? { id: 'chat-server', name: 'chat-server', namespaceClaims: ['/chat'] }
+          : null;
+      }
+    });
     await listen(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     url = `http://127.0.0.1:${address.port}`;
@@ -101,7 +114,7 @@ describe('citadel relay websocket server', () => {
 
     expect(health).toEqual({
       ok: true,
-      version: '0.1.0',
+      version: '0.2.0',
       participants: 0,
       activeSpaces: 0
     });
@@ -334,5 +347,27 @@ describe('citadel relay websocket server', () => {
       participants: 2,
       activeSpaces: 2
     });
+  });
+
+  it('authenticates an app owner and registers its exclusive namespace', async () => {
+    const owner = await connectClient();
+    const authenticated = waitForMessage<AuthenticationStateMessage>(owner, 'auth:state');
+    sendJson(owner, { type: 'auth:authenticate', token: 'chat-owner-key' });
+    expect(await authenticated).toEqual({
+      type: 'auth:state',
+      principal: { id: 'chat-server', name: 'chat-server' }
+    });
+
+    const claimed = waitForMessage<NamespaceClaimedMessage>(owner, 'namespace:claimed');
+    sendJson(owner, { type: 'namespace:claim', namespace: '/chat' });
+    expect(await claimed).toEqual({ type: 'namespace:claimed', namespace: '/chat' });
+
+    const secondOwner = await connectClient();
+    const secondAuthenticated = waitForMessage<AuthenticationStateMessage>(secondOwner, 'auth:state');
+    sendJson(secondOwner, { type: 'auth:authenticate', token: 'chat-owner-key' });
+    await secondAuthenticated;
+    const duplicate = waitForMessage<RelayErrorMessage>(secondOwner, 'error:notice');
+    sendJson(secondOwner, { type: 'namespace:claim', namespace: '/chat' });
+    expect((await duplicate).message).toBe('Namespace is already claimed.');
   });
 });

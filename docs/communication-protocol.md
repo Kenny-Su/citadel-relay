@@ -1,25 +1,38 @@
 # Citadel Relay Communication Protocol
 
-Citadel is a network-only relay. Apps connect over raw WebSocket, join a space, send packets, and receive packets from other participants in that space.
-
-Citadel does not install apps, load app code, persist app state, or validate app-specific payloads.
+Version `0.2.0` adds authenticated first-level namespace registration for app owners while retaining the existing raw WebSocket space relay.
 
 ## Transport
 
-- HTTP server: `http://localhost:3001`
 - WebSocket endpoint: `ws://localhost:3001/ws`
 - Health endpoint: `GET /health`
 
-## Relay Concepts
+## App Owner Authentication
 
-- `spaceId`: lowercase letters, numbers, and hyphens; invalid values normalize to `general`.
-- `participant`: `{ id: string; connectionId: string; name: string }`.
-- `participant.id`: stable guest id supplied by the client when valid, otherwise the generated connection id.
-- `connectionId`: generated per WebSocket connection.
+The default runtime reads `relay.config.json`. Each app has a unique name, a 256-bit lowercase hexadecimal pre-shared key, and one exact first-level claimed path.
 
-## Client To Server
+```ts
+{ type: 'auth:authenticate'; token: string }
+```
 
-Join or move to a space:
+Successful response:
+
+```ts
+{ type: 'auth:state'; principal: { id: string; name?: string } }
+```
+
+Claim and release:
+
+```ts
+{ type: 'namespace:claim'; namespace: '/chat' }
+{ type: 'namespace:release'; namespace: '/chat' }
+```
+
+The relay accepts a claim only when the authenticated principal is configured for the exact path and no other live connection owns it. Owner disconnect releases the claim.
+
+## Browser Space Traffic
+
+Browser space traffic remains unauthenticated in this release:
 
 ```ts
 {
@@ -30,8 +43,6 @@ Join or move to a space:
 }
 ```
 
-Send an app-owned packet:
-
 ```ts
 {
   type: 'space:packet';
@@ -41,65 +52,4 @@ Send an app-owned packet:
 }
 ```
 
-Leave the current space:
-
-```ts
-{
-  type: 'space:leave';
-}
-```
-
-## Server To Client
-
-Current space participants:
-
-```ts
-{
-  type: 'space:state';
-  spaceId: string;
-  participants: Participant[];
-}
-```
-
-Presence:
-
-```ts
-{
-  type: 'participant:joined' | 'participant:left';
-  spaceId: string;
-  participant: Participant;
-  createdAt: string;
-}
-```
-
-Relayed packet:
-
-```ts
-{
-  type: 'space:packet';
-  spaceId: string;
-  from: Participant;
-  topic?: string;
-  payload?: unknown;
-  createdAt: string;
-}
-```
-
-Error notice:
-
-```ts
-{
-  type: 'error:notice';
-  message: string;
-}
-```
-
-## Relay Behavior
-
-- A connection must join a space before sending `space:packet`.
-- `target: 'space'` broadcasts to everyone in the space, including the sender.
-- `target: 'others'` broadcasts to everyone in the space except the sender.
-- Missing `target` defaults to `space`.
-- A connection target unicasts to that connection only when it belongs to the sender's current space.
-- Citadel validates only the relay envelope. Payload shape and meaning are app-owned.
-- Relay state is in memory and disappears when the server process exits.
+Citadel validates the routing envelope but does not inspect app payloads.

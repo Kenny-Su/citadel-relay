@@ -1,0 +1,9 @@
+{
+  "apps": [
+    {
+      "name": "chat-server",
+      "preSharedKey": "REPLACE_WITH_OUTPUT_OF_OPENSSL_RAND_HEX_32",
+      "claimedPath": "/chat"
+    }
+  ]
+}

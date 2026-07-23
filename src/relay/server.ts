@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { nanoid } from 'nanoid';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import {
+  type AuthenticatedPrincipal,
   type ClientMessage,
   DEFAULT_SPACE_ID,
   type JoinSpaceMessage,
@@ -11,9 +12,15 @@ import {
   type RelayPacketMessage,
   type ServerMessage,
   type SpacePacketMessage,
+  isNamespace,
   normalizeGuestId,
   normalizeSpaceId
 } from './shared.js';
+import {
+  AUTH_TOKEN_MAX_LENGTH,
+  type RelayAuthenticator,
+  validateAuthenticatedPrincipal
+} from './auth.js';
 import { validateDisplayName } from './validation.js';
 import { RELAY_VERSION } from './version.js';
 import { createTrafficLogger } from './trafficLog.js';
@@ -25,6 +32,8 @@ type ParticipantSession = {
 
 type ConnectionRecord = {
   connectionId: string;
+  authenticating: boolean;
+  ownerPrincipal?: AuthenticatedPrincipal;
 };
 
 type HealthResponse = {
@@ -34,18 +43,25 @@ type HealthResponse = {
   activeSpaces: number;
 };
 
+export type RelayServerOptions = {
+  authenticateOwner?: RelayAuthenticator;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function createRelayServer() {
+export function createRelayServer(options: RelayServerOptions = {}) {
   const app = express();
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
   const connections = new Map<WebSocket, ConnectionRecord>();
   const sessions = new Map<WebSocket, ParticipantSession>();
   const spaces = new Map<string, Set<WebSocket>>();
+  const namespaceOwners = new Map<string, WebSocket>();
+  const ownerNamespaces = new Map<WebSocket, Set<string>>();
   const traffic = createTrafficLogger();
+  const authenticateOwner = options.authenticateOwner ?? (() => null);
 
   function send(socket: WebSocket, message: ServerMessage) {
     if (socket.readyState !== WebSocket.OPEN) {
@@ -74,6 +90,92 @@ export function createRelayServer() {
       type: 'error:notice',
       message
     });
+  }
+
+  async function handleOwnerAuthentication(socket: WebSocket, message: ClientMessage) {
+    const connection = connections.get(socket);
+    if (!connection) return;
+
+    if (connection.ownerPrincipal || connection.authenticating) {
+      sendError(socket, 'This connection has already attempted owner authentication.');
+      return;
+    }
+
+    if (
+      message.type !== 'auth:authenticate'
+      || typeof message.token !== 'string'
+      || message.token.length === 0
+      || message.token.length > AUTH_TOKEN_MAX_LENGTH
+    ) {
+      sendError(socket, 'Owner authentication requires a valid token.');
+      return;
+    }
+
+    connection.authenticating = true;
+    let principal: AuthenticatedPrincipal | null = null;
+    try {
+      const authenticated = await authenticateOwner(message.token);
+      principal = authenticated === null ? null : validateAuthenticatedPrincipal(authenticated);
+    } catch {
+      principal = null;
+    }
+
+    if (!connections.has(socket)) return;
+    if (!principal) {
+      sendError(socket, 'Authentication failed.');
+      socket.close(4401, 'Authentication failed');
+      return;
+    }
+
+    connection.authenticating = false;
+    connection.ownerPrincipal = principal;
+    send(socket, {
+      type: 'auth:state',
+      principal: {
+        id: principal.id,
+        ...(principal.name !== undefined ? { name: principal.name } : {})
+      }
+    });
+  }
+
+  function handleNamespaceClaim(socket: WebSocket, namespace: unknown) {
+    const principal = connections.get(socket)?.ownerPrincipal;
+    if (!principal) {
+      sendError(socket, 'Only an authenticated app owner can claim a namespace.');
+      return;
+    }
+    if (!isNamespace(namespace)) {
+      sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
+      return;
+    }
+    if (!principal.namespaceClaims?.includes(namespace)) {
+      sendError(socket, 'This app owner is not authorized for that namespace.');
+      return;
+    }
+    const existing = namespaceOwners.get(namespace);
+    if (existing && existing !== socket) {
+      sendError(socket, 'Namespace is already claimed.');
+      return;
+    }
+
+    namespaceOwners.set(namespace, socket);
+    let namespaces = ownerNamespaces.get(socket);
+    if (!namespaces) {
+      namespaces = new Set<string>();
+      ownerNamespaces.set(socket, namespaces);
+    }
+    namespaces.add(namespace);
+    send(socket, { type: 'namespace:claimed', namespace });
+  }
+
+  function releaseNamespace(socket: WebSocket, namespace: string, notifyOwner: boolean) {
+    if (namespaceOwners.get(namespace) !== socket) {
+      if (notifyOwner) sendError(socket, 'This connection does not own that namespace.');
+      return;
+    }
+    namespaceOwners.delete(namespace);
+    ownerNamespaces.get(socket)?.delete(namespace);
+    if (notifyOwner) send(socket, { type: 'namespace:released', namespace });
   }
 
   function getSpaceSockets(spaceId: string) {
@@ -295,6 +397,25 @@ export function createRelayServer() {
       }, message.type === 'space:packet' ? message.payload : undefined);
     }
 
+    if (message.type === 'auth:authenticate') {
+      void handleOwnerAuthentication(socket, message);
+      return;
+    }
+
+    if (message.type === 'namespace:claim') {
+      handleNamespaceClaim(socket, message.namespace);
+      return;
+    }
+
+    if (message.type === 'namespace:release') {
+      if (!isNamespace(message.namespace)) {
+        sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
+        return;
+      }
+      releaseNamespace(socket, message.namespace, true);
+      return;
+    }
+
     if (message.type === 'space:join') {
       handleJoin(socket, message);
       return;
@@ -337,7 +458,8 @@ export function createRelayServer() {
 
   wss.on('connection', (socket) => {
     connections.set(socket, {
-      connectionId: nanoid()
+      connectionId: nanoid(),
+      authenticating: false
     });
     if (traffic.enabled) traffic.log({
       event: 'socket-open',
@@ -355,6 +477,10 @@ export function createRelayServer() {
         spaceId: sessions.get(socket)?.spaceId
       });
       leaveCurrentSpace(socket);
+      for (const namespace of [...(ownerNamespaces.get(socket) ?? [])]) {
+        releaseNamespace(socket, namespace, false);
+      }
+      ownerNamespaces.delete(socket);
       sessions.delete(socket);
       connections.delete(socket);
     });

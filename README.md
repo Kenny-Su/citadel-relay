@@ -1,8 +1,40 @@
 # Citadel Relay
 
-A small raw WebSocket relay server for real-time spaces. Citadel owns network connections, participant identity, spaces, presence, and packet fan-out. External apps own their own UI, state machines, validation, persistence, and domain behavior.
+A raw WebSocket relay for real-time spaces, now with authenticated app-owner namespace claims. Existing browser space traffic remains unchanged in `0.2.0`; app servers can authenticate with a 256-bit pre-shared key and exclusively register an exact first-level path such as `/chat`.
 
-Citadel does not install apps, load app packages, run extension code, render a browser UI, or inspect app payloads.
+## App Owner Configuration
+
+Generate a key:
+
+```bash
+openssl rand -hex 32
+```
+
+Copy `relay.config.example.json` to the Git-ignored `relay.config.json` and replace the placeholder:
+
+```json
+{
+  "apps": [
+    {
+      "name": "chat-server",
+      "preSharedKey": "64-character-lowercase-hexadecimal-key",
+      "claimedPath": "/chat"
+    }
+  ]
+}
+```
+
+App owners authenticate and claim their configured path:
+
+```json
+{ "type": "auth:authenticate", "token": "app-owner-psk" }
+```
+
+```json
+{ "type": "namespace:claim", "namespace": "/chat" }
+```
+
+Names, keys, and claimed paths must be unique. Paths are exact and first-level.
 
 ## Local Development
 
@@ -11,21 +43,11 @@ npm install
 npm run dev
 ```
 
-The HTTP server runs at `http://localhost:3001`.
-The WebSocket endpoint runs at `ws://localhost:3001/ws`.
+The HTTP server runs at `http://localhost:3001`; the WebSocket endpoint is `ws://localhost:3001/ws`.
 
-## Test And Build
+## Existing Space Protocol
 
-```bash
-npm test
-npm run typecheck
-```
-
-`npm run build` runs the same typecheck used by CI-style verification.
-
-## Protocol
-
-Clients connect to `/ws`, join a space, then exchange packets through Citadel:
+Unauthenticated browser clients can continue to join spaces and exchange opaque packets:
 
 ```json
 { "type": "space:join", "spaceId": "general", "guestId": "stable-guest", "name": "Ada" }
@@ -35,28 +57,17 @@ Clients connect to `/ws`, join a space, then exchange packets through Citadel:
 { "type": "space:packet", "topic": "chat", "payload": { "body": "hello" }, "target": "others" }
 ```
 
-Packets can target the full space, everyone except the sender, or one connection in the sender's current space:
+See [Communication Protocol](docs/communication-protocol.md).
 
-```json
-{ "type": "space:packet", "topic": "command", "payload": {}, "target": { "connectionId": "recipient-connection-id" } }
-```
-
-Citadel routes packets without interpreting `payload`.
-See [Communication Protocol](docs/communication-protocol.md) for the full wire contract.
-
-## Traffic diagnostics
-
-Traffic logging is disabled by default. To record structured JSON Lines routing summaries:
+## Verification
 
 ```bash
-RELAY_TRAFFIC_LOG=summary npm run dev
+npm run typecheck
+npm test
 ```
 
-Summaries contain message type, topic, space and connection IDs, byte counts, routing target, and WebSocket buffered bytes. Set `RELAY_TRAFFIC_LOG=payload` only when complete opaque application payloads are required; payload mode is substantially noisier and may expose application data.
+## Environment
 
-## Server Environment
-
-The server reads:
-
-- `PORT`: HTTP and WebSocket port, default `3001`.
-- `RELAY_TRAFFIC_LOG`: `summary` or `payload`; unset/other values disable traffic logging.
+- `PORT`: server port, default `3001`.
+- `RELAY_CONFIG_PATH`: app-owner config, default `relay.config.json`.
+- `RELAY_TRAFFIC_LOG`: `summary` or `payload`.

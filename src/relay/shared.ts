@@ -4,6 +4,16 @@ export const SPACE_ID_MAX_LENGTH = 32;
 export const SPACE_ID_PATTERN = /^[a-z0-9-]+$/;
 export const GUEST_ID_MAX_LENGTH = 80;
 export const GUEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+export const NAMESPACE_MAX_LENGTH = 128;
+export const NAMESPACE_PATTERN = /^\/[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
+
+export type AuthenticatedPrincipal = {
+  id: string;
+  name?: string;
+  namespaceClaims?: string[];
+};
+
+export type PublicPrincipal = Pick<AuthenticatedPrincipal, 'id' | 'name'>;
 
 export type ConnectionTarget = {
   connectionId: string;
@@ -15,6 +25,21 @@ export type Participant = {
   id: string;
   connectionId: string;
   name: string;
+};
+
+export type AuthenticateMessage = {
+  type: 'auth:authenticate';
+  token: string;
+};
+
+export type ClaimNamespaceMessage = {
+  type: 'namespace:claim';
+  namespace: string;
+};
+
+export type ReleaseNamespaceMessage = {
+  type: 'namespace:release';
+  namespace: string;
 };
 
 export type JoinSpaceMessage = {
@@ -36,9 +61,22 @@ export type LeaveSpaceMessage = {
 };
 
 export type ClientMessage<TPayload = unknown> =
+  | AuthenticateMessage
+  | ClaimNamespaceMessage
+  | ReleaseNamespaceMessage
   | JoinSpaceMessage
   | SpacePacketMessage<TPayload>
   | LeaveSpaceMessage;
+
+export type AuthenticationStateMessage = {
+  type: 'auth:state';
+  principal: PublicPrincipal;
+};
+
+export type NamespaceClaimedMessage = {
+  type: 'namespace:claimed' | 'namespace:released';
+  namespace: string;
+};
 
 export type SpaceStateMessage = {
   type: 'space:state';
@@ -68,6 +106,8 @@ export type RelayErrorMessage = {
 };
 
 export type ServerMessage<TPayload = unknown> =
+  | AuthenticationStateMessage
+  | NamespaceClaimedMessage
   | SpaceStateMessage
   | ParticipantEvent
   | RelayPacketMessage<TPayload>
@@ -99,4 +139,10 @@ export function normalizeGuestId(input: unknown, fallback: string): string {
   }
 
   return value;
+}
+
+export function isNamespace(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length <= NAMESPACE_MAX_LENGTH
+    && NAMESPACE_PATTERN.test(value);
 }
