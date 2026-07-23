@@ -14,7 +14,8 @@ import {
   parsePreSharedKeyConfig,
   validateAuthenticatedPrincipal,
   validateClientJwtConfig,
-  validatePreSharedKeyConfig
+  validatePreSharedKeyConfig,
+  validateVerifiedClientIdentity
 } from '../../src/relay/auth.js';
 
 function testKey(fill: number) {
@@ -135,6 +136,14 @@ describe('relay authentication', () => {
       jwksUri: 'https://identity.example.com/jwks.json',
       algorithms: ['RS256', 'RS256']
     })).toThrow('duplicates');
+    expect(validateVerifiedClientIdentity({
+      issuer: 'https://identity.example.com/',
+      subject: 'client-42',
+      claims: { role: 'admin' }
+    })).toEqual({ subject: 'client-42' });
+    expect(() => validateVerifiedClientIdentity({
+      subject: 'x'.repeat(257)
+    })).toThrow('Client identity subjects');
   });
 
   it('verifies client JWT identity and selects keys from a remote JWKS', async () => {
@@ -172,17 +181,7 @@ describe('relay authentication', () => {
         claims: { role: 'member', groups: ['chat'] }
       });
 
-      expect(await authenticate(token)).toEqual({
-        issuer: 'https://identity.example.com/',
-        subject: 'client-42',
-        claims: expect.objectContaining({
-          iss: 'https://identity.example.com/',
-          aud: 'citadel-relay',
-          sub: 'client-42',
-          role: 'member',
-          groups: ['chat']
-        })
-      });
+      expect(await authenticate(token)).toEqual({ subject: 'client-42' });
     } finally {
       await close(server);
     }

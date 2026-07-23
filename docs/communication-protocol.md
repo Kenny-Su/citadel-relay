@@ -122,15 +122,13 @@ The owner receives:
   namespace: '/chat';
   connectionId: string;
   identity: {
-    issuer: string;
     subject: string;
-    claims: Record<string, unknown>;
   };
   hello?: unknown;
 }
 ```
 
-`identity` contains the complete verified JWT claims set, but never the original bearer token. The identity is fixed for that namespace session. JWT expiration after the session opens does not automatically disconnect the client; the owner receives `exp` and controls session lifetime policy.
+`identity.subject` is copied from the verified JWT subject and is fixed for that namespace session. Citadel does not forward the original bearer token, issuer, protected header, or other claims. JWT expiration after the session opens does not automatically disconnect the client.
 
 Pending clients cannot receive broadcasts. They can exchange unicast handshake packets with the owner. Verified identity does not change the pending state.
 
@@ -185,9 +183,7 @@ The client cannot choose a target. Citadel sends only to the namespace owner and
     connectionId: string;
     state: 'pending' | 'admitted';
     identity: {
-      issuer: string;
       subject: string;
-      claims: Record<string, unknown>;
     };
   };
   payload?: unknown;
@@ -235,8 +231,7 @@ Citadel does not inspect or validate `payload`.
 - Pre-authentication garbage and concurrent authentication messages close the socket.
 - WebSocket messages are limited to 64 KiB.
 - Verified client identity is immutable for a namespace session and never grants admission by itself.
-- Citadel forwards verified claims only to that namespace owner and never forwards the original JWT.
-- Namespace owners, not Citadel, interpret roles, scopes, groups, or other authorization claims.
+- Citadel forwards only the verified subject to that namespace owner and never forwards the original JWT or other claims.
 - Client packets travel only to the owner.
 - Only owners can unicast or broadcast downstream.
 - Broadcasts exclude pending and rejected clients.

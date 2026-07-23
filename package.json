@@ -1,9 +1,10 @@
 {
   "name": "citadel-relay",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
+    "dev:issuer": "node scripts/dev-jwt-issuer.mjs",
     "build": "npm run typecheck",
     "typecheck": "tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",

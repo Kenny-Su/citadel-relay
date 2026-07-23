@@ -10,9 +10,7 @@ export type AuthenticatedPrincipal = {
 export type PublicPrincipal = Pick<AuthenticatedPrincipal, 'id' | 'name'>;
 
 export type VerifiedClientIdentity = {
-  issuer: string;
   subject: string;
-  claims: Record<string, unknown>;
 };
 
 export type JwtClientCredential = {

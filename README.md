@@ -19,6 +19,7 @@ Copy the example and replace its placeholder with the generated 64-character low
 ```bash
 cp relay.config.example.json relay.config.json
 npm install
+npm run dev:issuer -- dev-user
 npm run dev
 ```
 
@@ -32,15 +33,17 @@ npm run dev
     }
   ],
   "clientJwt": {
-    "issuer": "https://identity.example.com/",
+    "issuer": "http://127.0.0.1:4000/",
     "audience": "citadel-relay",
-    "jwksUri": "https://identity.example.com/.well-known/jwks.json",
+    "jwksUri": "http://127.0.0.1:4000/jwks.json",
     "algorithms": ["RS256"]
   }
 }
 ```
 
 `relay.config.json` is ignored by Git. App names, keys, and claimed paths must be unique. Claimed paths are exact, first-level lowercase paths. The required `clientJwt` block applies to every namespace. Its JWKS URI must use HTTPS, except for loopback development URLs, and its algorithm list accepts only supported asymmetric signing algorithms.
+
+`dev:issuer` prints a one-hour JWT and serves its public key at `http://127.0.0.1:4000/jwks.json`. It creates a new in-memory key each time it starts.
 
 The HTTP server runs at `http://localhost:3001`. The WebSocket endpoint is `ws://localhost:3001/ws`.
 
@@ -80,7 +83,7 @@ A client opens `/chat` with required JWT credentials and optional opaque app han
 
 Missing or invalid credentials fail authentication before the namespace owner is notified.
 
-The relay verifies a supplied JWT and gives the owner a pending connection with trusted `issuer`, `subject`, and `claims` metadata. It never forwards the bearer token. Pending client packets and owner unicasts form a restricted handshake tunnel. The Chat server applies its ACL and responds with `namespace:accept` or `namespace:reject`; verified identity never implies admission.
+The relay verifies a supplied JWT and gives the owner a pending connection with a trusted `subject`. It never forwards the bearer token or other JWT claims. Pending client packets and owner unicasts form a restricted handshake tunnel. The Chat server applies its ACL and responds with `namespace:accept` or `namespace:reject`; verified identity never implies admission.
 
 After acceptance:
 
@@ -110,7 +113,7 @@ Traffic logging is disabled by default:
 RELAY_TRAFFIC_LOG=summary npm run dev
 ```
 
-Summaries contain routing metadata but never authentication keys, JWTs, or verified claims. `RELAY_TRAFFIC_LOG=payload` additionally records opaque app packet payloads and may expose credentials if an application puts them inside its own payload.
+Summaries contain routing metadata but never authentication keys, JWTs, or verified subjects. `RELAY_TRAFFIC_LOG=payload` additionally records opaque app packet payloads and may expose credentials if an application puts them inside its own payload.
 
 ## Server Environment
 

@@ -118,9 +118,7 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
       }
 
       return {
-        issuer: payload.iss,
-        subject: payload.sub,
-        claims: { ...payload }
+        subject: payload.sub
       };
     } catch {
       return null;
@@ -271,28 +269,14 @@ export function validateVerifiedClientIdentity(input: unknown): VerifiedClientId
     throw new Error('Client authentication must return an identity object.');
   }
 
-  if (
-    typeof input.issuer !== 'string'
-    || input.issuer.length === 0
-    || /[\u0000-\u001f\u007f]/.test(input.issuer)
-  ) {
-    throw new Error('Client identity issuers must be non-empty strings without control characters.');
-  }
-
   if (!isValidPrincipalId(input.subject)) {
     throw new Error(
       `Client identity subjects must be between 1 and ${PRINCIPAL_ID_MAX_LENGTH} characters without control characters.`
     );
   }
 
-  if (!isRecord(input.claims)) {
-    throw new Error('Client identity claims must be an object.');
-  }
-
   return {
-    issuer: input.issuer,
-    subject: input.subject,
-    claims: { ...input.claims }
+    subject: input.subject
   };
 }
 

@@ -79,15 +79,7 @@ describe('citadel namespace relay', () => {
   let authenticateClient: RelayClientAuthenticator;
   const sockets: WebSocket[] = [];
   const clientIdentity: VerifiedClientIdentity = {
-    issuer: 'https://identity.example.com/',
-    subject: 'client-42',
-    claims: {
-      iss: 'https://identity.example.com/',
-      aud: 'citadel-relay',
-      sub: 'client-42',
-      exp: 2_000_000_000,
-      role: 'member'
-    }
+    subject: 'client-42'
   };
 
   beforeEach(async () => {
@@ -188,7 +180,7 @@ describe('citadel namespace relay', () => {
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.6.0',
+      version: '0.7.0',
       connections: 0,
       clients: 0,
       pendingClients: 0,
@@ -649,7 +641,7 @@ describe('citadel namespace relay', () => {
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.6.0',
+      version: '0.7.0',
       connections: 2,
       clients: 1,
       pendingClients: 0,
