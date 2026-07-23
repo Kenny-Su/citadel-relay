@@ -41,13 +41,18 @@ describe('traffic logger', () => {
 
     logger.log({
       event: 'receive',
-      messageType: 'namespace:open',
+      messageType: 'app:authenticate',
+      bytes: 128
+    });
+    logger.log({
+      event: 'receive',
+      messageType: 'app:open',
       bytes: 512
     });
     logger.log({
       event: 'send',
-      messageType: 'namespace:connect',
-      toConnectionId: 'owner-1',
+      messageType: 'app:connect',
+      toConnectionId: 'app-server-1',
       bytes: 256
     });
     logger.log({
@@ -58,8 +63,9 @@ describe('traffic logger', () => {
     }, { body: 'hello' });
 
     const output = lines.join('\n');
+    expect(output).not.toContain('app-server-key');
     expect(output).not.toContain('signed-client-jwt');
     expect(output).not.toContain('client-42');
-    expect(JSON.parse(lines[2]).payload).toEqual({ body: 'hello' });
+    expect(JSON.parse(lines[3]).payload).toEqual({ body: 'hello' });
   });
 });

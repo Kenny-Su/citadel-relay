@@ -1,14 +1,21 @@
 # Citadel Relay
 
-Citadel is an authenticated first-level namespace router. App servers authenticate with pre-shared keys and exclusively claim paths such as `/chat`. Every client authenticates with a JWT from one configured global issuer. Citadel verifies client identity, while each app owner makes every admission and ACL decision.
+Citadel is an authenticated app router. App servers authenticate with pre-shared
+keys that map them to identifiers such as `chat`. Every client
+authenticates with a JWT from one configured global issuer. Citadel verifies
+client identity, while each app server makes every admission and ACL decision.
 
-All traffic still passes through Citadel. Clients can send packets only upstream to their namespace owner. Only the authenticated owner can unicast or broadcast downstream.
+All WebSocket traffic passes through Citadel. Clients can send packets only upstream
+to their app server. Only the authenticated app server can unicast or broadcast
+downstream.
 
-Citadel does not issue client identities or own app ACLs, subrooms, presence, payload validation, persistence, or domain behavior.
+An app ID selects an app server; it does not represent a space or room. Each app
+implements its own spaces, rooms, ACLs, presence, payload validation,
+persistence, and domain behavior. Citadel does not issue client identities.
 
 ## Local Development
 
-Create a 256-bit app-owner key:
+Create a 256-bit app-server key:
 
 ```bash
 openssl rand -hex 32
@@ -22,7 +29,7 @@ openssl genrsa -out client-jwt-private.pem 2048
 openssl rsa -in client-jwt-private.pem -pubout -out client-jwt-public.pem
 ```
 
-Copy the example and replace its app-owner key placeholder with the generated
+Copy the example and replace its app-server key placeholder with the generated
 64-character lowercase hexadecimal value:
 
 ```bash
@@ -35,9 +42,8 @@ npm run dev
 {
   "apps": [
     {
-      "name": "chat-server",
       "preSharedKey": "64-character-lowercase-hexadecimal-key",
-      "claimedPath": "/chat"
+      "appId": "chat"
     }
   ],
   "clientJwt": {
@@ -49,10 +55,10 @@ npm run dev
 }
 ```
 
-`relay.config.json` and both generated key files are ignored by Git. App names,
-keys, and claimed paths must be unique. Claimed paths are exact, first-level
-lowercase paths. The required `clientJwt` block applies to every namespace.
-Citadel loads the SPKI public key once at startup and accepts only the configured
+`relay.config.json` and both generated key files are ignored by Git. App-server
+keys and app IDs must be unique. App IDs are lowercase identifiers such as
+`chat`, without a leading slash. The required `clientJwt` block applies to every
+app. Citadel loads the SPKI public key once at startup and accepts only the configured
 asymmetric algorithm. A relative `publicKeyPath` is resolved from the process
 working directory.
 
@@ -72,30 +78,34 @@ The HTTP server runs at `http://localhost:3001`. The WebSocket endpoint is `ws:/
 
 ## Connection Gate
 
-Every WebSocket must establish a role within five seconds. Its first valid message must be either app-owner PSK authentication or a client namespace open carrying a JWT. Malformed, unknown, or additional messages during authentication close the connection with code `4401`.
+Every WebSocket must establish a role within five seconds. Its first valid
+message must be either `app:authenticate` with an app-server PSK or `app:open`
+with a client JWT. Malformed, unknown, or additional messages during
+authentication close the connection with code `4401`.
 
-Client JWTs are verified before Citadel reveals whether the requested namespace is available. Individual WebSocket messages are limited to 64 KiB and oversized messages close with code `1009`.
+Client JWTs are verified before Citadel reveals whether the requested app is available. Individual WebSocket messages are limited to 64 KiB and oversized messages close with code `1009`.
 
-These controls protect app owners and bound per-connection work. Production deployments should still apply IP rate limits, concurrent-connection limits, and TLS at the reverse proxy or network edge; Citadel intentionally does not implement network-level abuse policy.
+These controls protect app servers and bound per-connection work. Production deployments should still apply IP rate limits, concurrent-connection limits, and TLS at the reverse proxy or network edge; Citadel intentionally does not implement network-level abuse policy.
 
 ## Routing Model
 
-The Chat server authenticates and claims its configured path:
+The Chat server authenticates. Citadel immediately registers it as the live
+server for the app ID associated with that key:
 
 ```json
-{ "type": "auth:authenticate", "token": "app-owner-psk" }
+{ "type": "app:authenticate", "token": "app-server-psk" }
 ```
 
 ```json
-{ "type": "namespace:claim", "namespace": "/chat" }
+{ "type": "app:ready", "appId": "chat" }
 ```
 
-A client opens `/chat` with required JWT credentials and optional opaque app handshake data:
+A client opens `chat` with required JWT credentials and optional opaque app handshake data:
 
 ```json
 {
-  "type": "namespace:open",
-  "namespace": "/chat",
+  "type": "app:open",
+  "appId": "chat",
   "credential": {
     "type": "jwt",
     "token": "signed-client-jwt"
@@ -104,9 +114,13 @@ A client opens `/chat` with required JWT credentials and optional opaque app han
 }
 ```
 
-Missing or invalid credentials fail authentication before the namespace owner is notified.
+Missing or invalid credentials fail authentication before the app server is notified.
 
-The relay verifies a supplied JWT and gives the owner a pending connection with a trusted `subject`. It never forwards the bearer token or other JWT claims. Pending client packets and owner unicasts form a restricted handshake tunnel. The Chat server applies its ACL and responds with `namespace:accept` or `namespace:reject`; verified identity never implies admission.
+The relay verifies a supplied JWT and gives the app server a pending connection
+with a trusted `subject`. It never forwards the bearer token or other JWT
+claims. Pending client packets and server unicasts form a restricted handshake
+tunnel. The Chat server applies its ACL and responds with `app:accept` or
+`app:reject`; verified identity never implies admission.
 
 After acceptance:
 
@@ -114,10 +128,11 @@ After acceptance:
 Browser A → Relay → Chat server → Relay → Browser B
 ```
 
-- Clients send `client:packet`; the relay adds their trusted connection ID and verified identity, then sends only to the owner.
-- Owners send `server:packet`; `target: "all"` reaches admitted clients and a connection target performs unicast.
+- Clients send `client:packet`; the relay adds their trusted connection ID and verified identity, then sends only to the app server.
+- App servers send `server:packet`; `target: "all"` reaches admitted clients and a connection target performs unicast.
+- Packets do not carry an app ID; the route is fixed when the socket authenticates or opens an app.
 - A client cannot target another client or request a broadcast.
-- The owner can revoke a client at any time.
+- The app server can revoke a client at any time.
 
 See [Communication Protocol](docs/communication-protocol.md) for the complete wire contract.
 
@@ -141,5 +156,5 @@ Summaries contain routing metadata but never authentication keys, JWTs, or verif
 ## Server Environment
 
 - `PORT`: HTTP and WebSocket port, default `3001`.
-- `RELAY_CONFIG_PATH`: PSK app-owner config, default `relay.config.json`.
+- `RELAY_CONFIG_PATH`: PSK app-server config, default `relay.config.json`.
 - `RELAY_TRAFFIC_LOG`: `summary` or `payload`; other values disable logging.

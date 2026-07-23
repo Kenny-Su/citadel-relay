@@ -3,19 +3,18 @@ import { createServer } from 'node:http';
 import { nanoid } from 'nanoid';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import {
-  type AuthenticatedPrincipal,
-  type ClientMessage,
-  type ClientState,
-  type PublicPrincipal,
-  type ServerMessage,
+  type AppClientState,
+  type AuthenticatedAppServer,
+  type RelayInboundMessage,
+  type RelayOutboundMessage,
   type VerifiedClientIdentity,
-  isNamespace
+  isAppId
 } from './shared.js';
 import {
   AUTH_TOKEN_MAX_LENGTH,
-  type RelayAuthenticator,
+  type RelayAppServerAuthenticator,
   type RelayClientAuthenticator,
-  validateAuthenticatedPrincipal,
+  validateAuthenticatedAppServer,
   validateVerifiedClientIdentity
 } from './auth.js';
 import { RELAY_VERSION } from './version.js';
@@ -24,22 +23,22 @@ import { createTrafficLogger } from './trafficLog.js';
 const DEFAULT_ADMISSION_TIMEOUT_MS = 60_000;
 const DEFAULT_AUTHENTICATION_TIMEOUT_MS = 5_000;
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 64 * 1_024;
-const OWNER_MESSAGE_MAX_LENGTH = 256;
+const APP_SERVER_MESSAGE_MAX_LENGTH = 256;
 
 type ConnectionRecord = {
   connectionId: string;
   authenticating: boolean;
-  openingNamespace: boolean;
+  openingApp: boolean;
   authenticationTimer?: ReturnType<typeof setTimeout>;
   clientIdentity?: VerifiedClientIdentity;
-  ownerPrincipal?: AuthenticatedPrincipal;
+  appServer?: AuthenticatedAppServer;
 };
 
 type ClientSession = {
-  namespace: string;
-  owner: WebSocket;
+  appId: string;
+  appServer: WebSocket;
   requestId: string;
-  state: ClientState;
+  state: AppClientState;
   admissionTimer: ReturnType<typeof setTimeout>;
   identity: VerifiedClientIdentity;
 };
@@ -50,11 +49,11 @@ type HealthResponse = {
   connections: number;
   clients: number;
   pendingClients: number;
-  claimedNamespaces: number;
+  connectedApps: number;
 };
 
 export type RelayServerOptions = {
-  authenticateOwner: RelayAuthenticator;
+  authenticateAppServer: RelayAppServerAuthenticator;
   authenticateClient: RelayClientAuthenticator;
   admissionTimeoutMs?: number;
   authenticationTimeoutMs?: number;
@@ -64,16 +63,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function publicPrincipal(principal: AuthenticatedPrincipal): PublicPrincipal {
-  return {
-    id: principal.id,
-    ...(principal.name !== undefined ? { name: principal.name } : {})
-  };
-}
-
 export function createRelayServer(options: RelayServerOptions) {
-  if (!options || typeof options.authenticateOwner !== 'function') {
-    throw new Error('createRelayServer requires an authenticateOwner function.');
+  if (!options || typeof options.authenticateAppServer !== 'function') {
+    throw new Error('createRelayServer requires an authenticateAppServer function.');
   }
   if (typeof options.authenticateClient !== 'function') {
     throw new Error('createRelayServer requires an authenticateClient function.');
@@ -99,12 +91,11 @@ export function createRelayServer(options: RelayServerOptions) {
   const socketsByConnectionId = new Map<string, WebSocket>();
   const clientSessions = new Map<WebSocket, ClientSession>();
   const pendingRequests = new Map<string, WebSocket>();
-  const namespaceOwners = new Map<string, WebSocket>();
-  const ownerNamespaces = new Map<WebSocket, Set<string>>();
-  const namespaceClients = new Map<string, Set<WebSocket>>();
+  const appServers = new Map<string, WebSocket>();
+  const appClients = new Map<string, Set<WebSocket>>();
   const traffic = createTrafficLogger();
 
-  function send(socket: WebSocket, message: ServerMessage) {
+  function send(socket: WebSocket, message: RelayOutboundMessage) {
     if (socket.readyState !== WebSocket.OPEN) return;
 
     const serialized = JSON.stringify(message);
@@ -114,7 +105,7 @@ export function createRelayServer(options: RelayServerOptions) {
       traffic.log({
         event: 'send',
         messageType: message.type,
-        namespace: 'namespace' in message ? message.namespace : undefined,
+        appId: clientSessions.get(socket)?.appId ?? connections.get(socket)?.appServer?.appId,
         toConnectionId: connections.get(socket)?.connectionId,
         fromConnectionId: message.type === 'client:packet' ? message.from.connectionId : undefined,
         bytes: Buffer.byteLength(serialized),
@@ -144,14 +135,13 @@ export function createRelayServer(options: RelayServerOptions) {
 
   function isAuthenticatedConnection(socket: WebSocket) {
     const connection = connections.get(socket);
-    return connection?.ownerPrincipal !== undefined
+    return connection?.appServer !== undefined
       || connection?.clientIdentity !== undefined
       || clientSessions.has(socket);
   }
 
   function sendClientState(
     socket: WebSocket,
-    namespace: string,
     state: 'pending' | 'admitted' | 'rejected' | 'closed',
     message?: string
   ) {
@@ -159,8 +149,7 @@ export function createRelayServer(options: RelayServerOptions) {
     if (!connectionId) return;
 
     send(socket, {
-      type: 'namespace:state',
-      namespace,
+      type: 'app:state',
       state,
       connectionId,
       ...(message !== undefined ? { message } : {})
@@ -170,7 +159,7 @@ export function createRelayServer(options: RelayServerOptions) {
   function removeClientSession(
     socket: WebSocket,
     options: {
-      notifyOwner: boolean;
+      notifyAppServer: boolean;
       reason: 'client-closed' | 'client-disconnected' | 'admission-timeout';
     }
   ) {
@@ -181,14 +170,13 @@ export function createRelayServer(options: RelayServerOptions) {
     clearTimeout(session.admissionTimer);
     pendingRequests.delete(session.requestId);
     clientSessions.delete(socket);
-    const clients = namespaceClients.get(session.namespace);
+    const clients = appClients.get(session.appId);
     clients?.delete(socket);
-    if (clients?.size === 0) namespaceClients.delete(session.namespace);
+    if (clients?.size === 0) appClients.delete(session.appId);
 
-    if (options.notifyOwner) {
-      send(session.owner, {
-        type: 'namespace:disconnect',
-        namespace: session.namespace,
+    if (options.notifyAppServer) {
+      send(session.appServer, {
+        type: 'app:disconnect',
         connectionId: connection.connectionId,
         admitted: session.state === 'admitted',
         reason: options.reason,
@@ -197,58 +185,55 @@ export function createRelayServer(options: RelayServerOptions) {
     }
   }
 
-  function releaseNamespace(owner: WebSocket, namespace: string, notifyOwner: boolean) {
-    if (namespaceOwners.get(namespace) !== owner) {
-      if (notifyOwner) sendError(owner, 'This connection does not own that namespace.');
-      return;
+  function disconnectAppServer(appServer: WebSocket, appId: string) {
+    if (appServers.get(appId) !== appServer) return;
+    appServers.delete(appId);
+    for (const client of [...(appClients.get(appId) ?? [])]) {
+      sendClientState(client, 'closed', 'The app server is unavailable.');
+      removeClientSession(client, { notifyAppServer: false, reason: 'client-closed' });
     }
-
-    namespaceOwners.delete(namespace);
-    ownerNamespaces.get(owner)?.delete(namespace);
-
-    for (const client of [...(namespaceClients.get(namespace) ?? [])]) {
-      sendClientState(client, namespace, 'closed', 'The namespace owner is unavailable.');
-      removeClientSession(client, { notifyOwner: false, reason: 'client-closed' });
-    }
-
-    if (notifyOwner) send(owner, { type: 'namespace:released', namespace });
   }
 
-  async function handleOwnerAuthentication(socket: WebSocket, message: ClientMessage) {
+  async function handleAppServerAuthentication(
+    socket: WebSocket,
+    message: RelayInboundMessage
+  ) {
     const connection = connections.get(socket);
     if (!connection) return;
 
     if (connection.clientIdentity || clientSessions.has(socket)) {
-      sendError(socket, 'A namespace client cannot authenticate as an owner.');
+      sendError(socket, 'An app client cannot authenticate as an app server.');
       return;
     }
 
-    if (connection.openingNamespace) {
-      sendError(socket, 'A namespace client cannot authenticate as an owner.');
+    if (connection.openingApp) {
+      sendError(socket, 'An app client cannot authenticate as an app server.');
       return;
     }
 
-    if (connection.ownerPrincipal || connection.authenticating) {
-      sendError(socket, 'This connection has already attempted owner authentication.');
+    if (connection.appServer || connection.authenticating) {
+      sendError(socket, 'This connection has already attempted app-server authentication.');
       return;
     }
 
     if (
-      message.type !== 'auth:authenticate'
+      message.type !== 'app:authenticate'
       || typeof message.token !== 'string'
       || message.token.length === 0
       || message.token.length > AUTH_TOKEN_MAX_LENGTH
     ) {
-      sendError(socket, 'Owner authentication requires a valid token.');
+      sendError(socket, 'App server authentication requires a valid token.');
       return;
     }
 
     connection.authenticating = true;
-    let principal: AuthenticatedPrincipal | null = null;
+    let authenticatedAppServer: AuthenticatedAppServer | null = null;
 
     try {
-      const authenticated = await options.authenticateOwner(message.token);
-      principal = authenticated === null ? null : validateAuthenticatedPrincipal(authenticated);
+      const authenticated = await options.authenticateAppServer(message.token);
+      authenticatedAppServer = authenticated === null
+        ? null
+        : validateAuthenticatedAppServer(authenticated);
     } catch (error) {
       if (traffic.enabled) {
         traffic.log({
@@ -261,69 +246,44 @@ export function createRelayServer(options: RelayServerOptions) {
 
     if (!connections.has(socket)) return;
 
-    if (!principal) {
+    if (!authenticatedAppServer) {
       sendError(socket, 'Authentication failed.');
       socket.close(4401, 'Authentication failed');
       return;
     }
 
+    const existingAppServer = appServers.get(authenticatedAppServer.appId);
+    if (existingAppServer && existingAppServer !== socket) {
+      sendError(socket, 'App already has a connected server.');
+      socket.close(4401, 'App already has a connected server');
+      return;
+    }
+
     connection.authenticating = false;
-    connection.ownerPrincipal = principal;
+    connection.appServer = authenticatedAppServer;
+    appServers.set(authenticatedAppServer.appId, socket);
     clearAuthenticationTimer(socket);
-    send(socket, { type: 'auth:state', principal: publicPrincipal(principal) });
+    send(socket, { type: 'app:ready', appId: authenticatedAppServer.appId });
   }
 
-  function handleNamespaceClaim(socket: WebSocket, namespace: unknown) {
-    const principal = connections.get(socket)?.ownerPrincipal;
-    if (!principal) {
-      sendError(socket, 'Only an authenticated app owner can claim a namespace.');
-      return;
-    }
-
-    if (!isNamespace(namespace)) {
-      sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
-      return;
-    }
-
-    if (!principal.namespaceClaims?.includes(namespace)) {
-      sendError(socket, 'This app owner is not authorized for that namespace.');
-      return;
-    }
-
-    const existingOwner = namespaceOwners.get(namespace);
-    if (existingOwner && existingOwner !== socket) {
-      sendError(socket, 'Namespace is already claimed.');
-      return;
-    }
-
-    namespaceOwners.set(namespace, socket);
-    let namespaces = ownerNamespaces.get(socket);
-    if (!namespaces) {
-      namespaces = new Set<string>();
-      ownerNamespaces.set(socket, namespaces);
-    }
-    namespaces.add(namespace);
-    send(socket, { type: 'namespace:claimed', namespace });
-  }
-
-  async function handleNamespaceOpen(socket: WebSocket, message: ClientMessage) {
-    if (message.type !== 'namespace:open') return;
+  async function handleAppOpen(socket: WebSocket, message: RelayInboundMessage) {
+    if (message.type !== 'app:open') return;
 
     const connection = connections.get(socket);
     if (!connection) return;
 
-    if (connection.ownerPrincipal) {
-      sendError(socket, 'An app owner connection cannot open as a namespace client.');
+    if (connection.appServer) {
+      sendError(socket, 'An app server connection cannot open as an app client.');
       return;
     }
 
     if (connection.authenticating) {
-      sendError(socket, 'Owner authentication is still in progress.');
+      sendError(socket, 'App server authentication is still in progress.');
       return;
     }
 
-    if (clientSessions.has(socket) || connection.openingNamespace) {
-      sendError(socket, 'This client already has an open namespace.');
+    if (clientSessions.has(socket) || connection.openingApp) {
+      sendError(socket, 'This client already has an open app connection.');
       return;
     }
 
@@ -340,7 +300,7 @@ export function createRelayServer(options: RelayServerOptions) {
       return;
     }
 
-    connection.openingNamespace = true;
+    connection.openingApp = true;
     let identity: VerifiedClientIdentity | null = null;
     try {
       const authenticated = await options.authenticateClient(credential.token);
@@ -359,7 +319,7 @@ export function createRelayServer(options: RelayServerOptions) {
 
     const authenticatedConnection = connections.get(socket);
     if (!authenticatedConnection) return;
-    authenticatedConnection.openingNamespace = false;
+    authenticatedConnection.openingApp = false;
 
     if (!identity) {
       sendError(socket, 'Client authentication failed.');
@@ -370,17 +330,17 @@ export function createRelayServer(options: RelayServerOptions) {
     authenticatedConnection.clientIdentity = identity;
     clearAuthenticationTimer(socket);
 
-    if (!isNamespace(message.namespace)) {
-      sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
+    if (!isAppId(message.appId)) {
+      sendError(socket, 'App ID must be a lowercase identifier such as "chat".');
       return;
     }
 
     const currentConnection = connections.get(socket);
     if (!currentConnection) return;
-    const owner = namespaceOwners.get(message.namespace);
-    if (!owner) {
-      currentConnection.openingNamespace = false;
-      sendError(socket, 'Namespace is not available.');
+    const appServer = appServers.get(message.appId);
+    if (!appServer) {
+      currentConnection.openingApp = false;
+      sendError(socket, 'App is not available.');
       return;
     }
 
@@ -389,12 +349,12 @@ export function createRelayServer(options: RelayServerOptions) {
       const session = clientSessions.get(socket);
       if (!session || session.requestId !== requestId || session.state !== 'pending') return;
 
-      sendClientState(socket, session.namespace, 'rejected', 'Namespace admission timed out.');
-      removeClientSession(socket, { notifyOwner: true, reason: 'admission-timeout' });
+      sendClientState(socket, 'rejected', 'App admission timed out.');
+      removeClientSession(socket, { notifyAppServer: true, reason: 'admission-timeout' });
     }, admissionTimeoutMs);
     const session: ClientSession = {
-      namespace: message.namespace,
-      owner,
+      appId: message.appId,
+      appServer,
       requestId,
       state: 'pending',
       admissionTimer,
@@ -403,112 +363,108 @@ export function createRelayServer(options: RelayServerOptions) {
 
     clientSessions.set(socket, session);
     pendingRequests.set(requestId, socket);
-    let clients = namespaceClients.get(message.namespace);
+    let clients = appClients.get(message.appId);
     if (!clients) {
       clients = new Set<WebSocket>();
-      namespaceClients.set(message.namespace, clients);
+      appClients.set(message.appId, clients);
     }
     clients.add(socket);
 
-    sendClientState(socket, message.namespace, 'pending');
-    send(owner, {
-      type: 'namespace:connect',
+    sendClientState(socket, 'pending');
+    send(appServer, {
+      type: 'app:connect',
       requestId,
-      namespace: message.namespace,
       connectionId: connection.connectionId,
       identity,
       ...('hello' in message ? { hello: message.hello } : {})
     });
   }
 
-  function getPendingSession(owner: WebSocket, requestId: unknown) {
+  function getPendingSession(appServer: WebSocket, requestId: unknown) {
     if (typeof requestId !== 'string') {
-      sendError(owner, 'Namespace admission requires a request id.');
+      sendError(appServer, 'App admission requires a request id.');
       return undefined;
     }
 
     const client = pendingRequests.get(requestId);
     const session = client ? clientSessions.get(client) : undefined;
-    if (!client || !session || session.owner !== owner || session.state !== 'pending') {
-      sendError(owner, 'Pending namespace request was not found for this owner.');
+    if (!client || !session || session.appServer !== appServer || session.state !== 'pending') {
+      sendError(appServer, 'Pending app request was not found for this server.');
       return undefined;
     }
 
     return { client, session };
   }
 
-  function handleNamespaceAccept(owner: WebSocket, requestId: unknown) {
-    const pending = getPendingSession(owner, requestId);
+  function handleAppAccept(appServer: WebSocket, requestId: unknown) {
+    const pending = getPendingSession(appServer, requestId);
     if (!pending) return;
 
     clearTimeout(pending.session.admissionTimer);
     pendingRequests.delete(pending.session.requestId);
     pending.session.state = 'admitted';
-    sendClientState(pending.client, pending.session.namespace, 'admitted');
+    sendClientState(pending.client, 'admitted');
   }
 
-  function validateOwnerMessage(socket: WebSocket, message: unknown) {
+  function validateAppServerMessage(socket: WebSocket, message: unknown) {
     if (message === undefined) return true;
-    if (typeof message !== 'string' || message.length > OWNER_MESSAGE_MAX_LENGTH) {
-      sendError(socket, `Owner messages must be ${OWNER_MESSAGE_MAX_LENGTH} characters or fewer.`);
+    if (typeof message !== 'string' || message.length > APP_SERVER_MESSAGE_MAX_LENGTH) {
+      sendError(socket, `App server messages must be ${APP_SERVER_MESSAGE_MAX_LENGTH} characters or fewer.`);
       return false;
     }
     return true;
   }
 
-  function handleNamespaceReject(owner: WebSocket, requestId: unknown, message: unknown) {
-    if (!validateOwnerMessage(owner, message)) return;
-    const pending = getPendingSession(owner, requestId);
+  function handleAppReject(appServer: WebSocket, requestId: unknown, message: unknown) {
+    if (!validateAppServerMessage(appServer, message)) return;
+    const pending = getPendingSession(appServer, requestId);
     if (!pending) return;
 
     sendClientState(
       pending.client,
-      pending.session.namespace,
       'rejected',
       typeof message === 'string' ? message : undefined
     );
-    removeClientSession(pending.client, { notifyOwner: false, reason: 'client-closed' });
+    removeClientSession(pending.client, { notifyAppServer: false, reason: 'client-closed' });
   }
 
-  function handleNamespaceRevoke(owner: WebSocket, connectionId: unknown, message: unknown) {
-    if (!validateOwnerMessage(owner, message)) return;
+  function handleAppRevoke(appServer: WebSocket, connectionId: unknown, message: unknown) {
+    if (!validateAppServerMessage(appServer, message)) return;
     if (typeof connectionId !== 'string') {
-      sendError(owner, 'Namespace revocation requires a connection id.');
+      sendError(appServer, 'App revocation requires a connection id.');
       return;
     }
 
     const client = socketsByConnectionId.get(connectionId);
     const session = client ? clientSessions.get(client) : undefined;
-    if (!client || !session || session.owner !== owner) {
-      sendError(owner, 'Namespace client was not found for this owner.');
+    if (!client || !session || session.appServer !== appServer) {
+      sendError(appServer, 'App client was not found for this app server.');
       return;
     }
 
     sendClientState(
       client,
-      session.namespace,
       'rejected',
       typeof message === 'string' ? message : undefined
     );
-    removeClientSession(client, { notifyOwner: false, reason: 'client-closed' });
+    removeClientSession(client, { notifyAppServer: false, reason: 'client-closed' });
   }
 
-  function handleClientPacket(socket: WebSocket, message: ClientMessage) {
+  function handleClientPacket(socket: WebSocket, message: RelayInboundMessage) {
     if (message.type !== 'client:packet') return;
-    if ('target' in message || 'namespace' in message) {
-      sendError(socket, 'Client packets cannot specify a namespace or target.');
+    if ('target' in message) {
+      sendError(socket, 'Client packets cannot specify a target.');
       return;
     }
     const session = clientSessions.get(socket);
     const connection = connections.get(socket);
     if (!session || !connection) {
-      sendError(socket, 'Only an open namespace client can send client packets.');
+      sendError(socket, 'Only a connected app client can send client packets.');
       return;
     }
 
-    send(session.owner, {
+    send(session.appServer, {
       type: 'client:packet',
-      namespace: session.namespace,
       from: {
         connectionId: connection.connectionId,
         state: session.state,
@@ -518,47 +474,42 @@ export function createRelayServer(options: RelayServerOptions) {
     });
   }
 
-  function handleServerPacket(owner: WebSocket, message: ClientMessage) {
+  function handleServerPacket(appServer: WebSocket, message: RelayInboundMessage) {
     if (message.type !== 'server:packet') return;
-    if (!connections.get(owner)?.ownerPrincipal) {
-      sendError(owner, 'Only an authenticated namespace owner can send server packets.');
-      return;
-    }
-
-    if (!isNamespace(message.namespace) || namespaceOwners.get(message.namespace) !== owner) {
-      sendError(owner, 'This connection does not own the packet namespace.');
+    const connection = connections.get(appServer);
+    if (!connection?.appServer) {
+      sendError(appServer, 'Only an authenticated app server can send server packets.');
       return;
     }
 
     const sendPacket = (client: WebSocket) => send(client, {
       type: 'server:packet',
-      namespace: message.namespace,
       ...('payload' in message ? { payload: message.payload } : {})
     });
 
     if (message.target === 'all') {
-      for (const client of namespaceClients.get(message.namespace) ?? []) {
+      for (const client of appClients.get(connection.appServer.appId) ?? []) {
         if (clientSessions.get(client)?.state === 'admitted') sendPacket(client);
       }
       return;
     }
 
     if (!isRecord(message.target) || typeof message.target.connectionId !== 'string') {
-      sendError(owner, 'Server packet target must be "all" or a connection target.');
+      sendError(appServer, 'Server packet target must be "all" or a connection target.');
       return;
     }
 
     const client = socketsByConnectionId.get(message.target.connectionId);
     const session = client ? clientSessions.get(client) : undefined;
-    if (!client || !session || session.owner !== owner || session.namespace !== message.namespace) {
-      sendError(owner, 'Packet target is not a client of this namespace owner.');
+    if (!client || !session || session.appServer !== appServer) {
+      sendError(appServer, 'Packet target is not a client of this app server.');
       return;
     }
 
     sendPacket(client);
   }
 
-  function parseMessage(socket: WebSocket, data: RawData): ClientMessage | null {
+  function parseMessage(socket: WebSocket, data: RawData): RelayInboundMessage | null {
     let parsed: unknown;
     try {
       parsed = JSON.parse(data.toString());
@@ -579,7 +530,7 @@ export function createRelayServer(options: RelayServerOptions) {
       }
       return null;
     }
-    return parsed as ClientMessage;
+    return parsed as RelayInboundMessage;
   }
 
   function handleMessage(socket: WebSocket, data: RawData) {
@@ -594,7 +545,9 @@ export function createRelayServer(options: RelayServerOptions) {
       traffic.log({
         event: 'receive',
         messageType: message.type,
-        namespace: 'namespace' in message ? message.namespace : clientSessions.get(socket)?.namespace,
+        appId: message.type === 'app:open'
+          ? message.appId
+          : clientSessions.get(socket)?.appId ?? connection.appServer?.appId,
         fromConnectionId: connections.get(socket)?.connectionId,
         target: message.type === 'server:packet'
           ? typeof message.target === 'object' ? 'connection' : message.target
@@ -611,16 +564,16 @@ export function createRelayServer(options: RelayServerOptions) {
     }
 
     if (!authenticated) {
-      if (connection.authenticating || connection.openingNamespace) {
+      if (connection.authenticating || connection.openingApp) {
         closeUnauthenticated(socket, 'Authentication is already in progress.');
         return;
       }
-      if (message.type === 'auth:authenticate') {
-        void handleOwnerAuthentication(socket, message);
+      if (message.type === 'app:authenticate') {
+        void handleAppServerAuthentication(socket, message);
         return;
       }
-      if (message.type === 'namespace:open') {
-        void handleNamespaceOpen(socket, message);
+      if (message.type === 'app:open') {
+        void handleAppOpen(socket, message);
         return;
       }
 
@@ -628,46 +581,34 @@ export function createRelayServer(options: RelayServerOptions) {
       return;
     }
 
-    if (message.type === 'auth:authenticate') {
-      void handleOwnerAuthentication(socket, message);
+    if (message.type === 'app:authenticate') {
+      void handleAppServerAuthentication(socket, message);
       return;
     }
-    if (message.type === 'namespace:claim') {
-      handleNamespaceClaim(socket, message.namespace);
+    if (message.type === 'app:open') {
+      void handleAppOpen(socket, message);
       return;
     }
-    if (message.type === 'namespace:release') {
-      if (!isNamespace(message.namespace)) {
-        sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
-        return;
-      }
-      releaseNamespace(socket, message.namespace, true);
-      return;
-    }
-    if (message.type === 'namespace:open') {
-      void handleNamespaceOpen(socket, message);
-      return;
-    }
-    if (message.type === 'namespace:close') {
+    if (message.type === 'app:close') {
       const session = clientSessions.get(socket);
       if (!session) {
-        sendError(socket, 'This client does not have an open namespace.');
+        sendError(socket, 'This client does not have an open app connection.');
         return;
       }
-      sendClientState(socket, session.namespace, 'closed');
-      removeClientSession(socket, { notifyOwner: true, reason: 'client-closed' });
+      sendClientState(socket, 'closed');
+      removeClientSession(socket, { notifyAppServer: true, reason: 'client-closed' });
       return;
     }
-    if (message.type === 'namespace:accept') {
-      handleNamespaceAccept(socket, message.requestId);
+    if (message.type === 'app:accept') {
+      handleAppAccept(socket, message.requestId);
       return;
     }
-    if (message.type === 'namespace:reject') {
-      handleNamespaceReject(socket, message.requestId, message.message);
+    if (message.type === 'app:reject') {
+      handleAppReject(socket, message.requestId, message.message);
       return;
     }
-    if (message.type === 'namespace:revoke') {
-      handleNamespaceRevoke(socket, message.connectionId, message.message);
+    if (message.type === 'app:revoke') {
+      handleAppRevoke(socket, message.connectionId, message.message);
       return;
     }
     if (message.type === 'client:packet') {
@@ -689,7 +630,7 @@ export function createRelayServer(options: RelayServerOptions) {
       connections: connections.size,
       clients: clientSessions.size,
       pendingClients: [...clientSessions.values()].filter(({ state }) => state === 'pending').length,
-      claimedNamespaces: namespaceOwners.size
+      connectedApps: appServers.size
     } satisfies HealthResponse);
   });
 
@@ -710,7 +651,7 @@ export function createRelayServer(options: RelayServerOptions) {
     const connection: ConnectionRecord = {
       connectionId,
       authenticating: false,
-      openingNamespace: false
+      openingApp: false
     };
     connections.set(socket, connection);
     socketsByConnectionId.set(connectionId, socket);
@@ -738,19 +679,18 @@ export function createRelayServer(options: RelayServerOptions) {
       if (traffic.enabled) traffic.log({
         event: 'socket-close',
         connectionId: connection?.connectionId,
-        namespace: clientSession?.namespace
+        appId: clientSession?.appId ?? connection?.appServer?.appId
       });
 
       if (clientSession) {
-        removeClientSession(socket, { notifyOwner: true, reason: 'client-disconnected' });
+        removeClientSession(socket, { notifyAppServer: true, reason: 'client-disconnected' });
       }
       clearAuthenticationTimer(socket);
-      for (const namespace of [...(ownerNamespaces.get(socket) ?? [])]) {
-        releaseNamespace(socket, namespace, false);
+      if (connection?.appServer) {
+        disconnectAppServer(socket, connection.appServer.appId);
       }
 
       if (connection) socketsByConnectionId.delete(connection.connectionId);
-      ownerNamespaces.delete(socket);
       connections.delete(socket);
     });
   });

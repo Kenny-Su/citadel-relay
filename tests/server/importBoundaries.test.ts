@@ -75,34 +75,34 @@ describe('relay server import boundaries', () => {
 
   it('exports relay contracts and runtime values', () => {
     expect(sortedExportKeys(relayContract)).toEqual([
+      'APP_ID_MAX_LENGTH',
+      'APP_ID_PATTERN',
       'AUTH_TOKEN_MAX_LENGTH',
       'CLIENT_JWT_CLOCK_TOLERANCE_SECONDS',
-      'NAMESPACE_MAX_LENGTH',
-      'NAMESPACE_PATTERN',
+      'CLIENT_SUBJECT_MAX_LENGTH',
       'PRE_SHARED_KEY_BYTES',
       'PRE_SHARED_KEY_ENCODED_LENGTH',
-      'PRINCIPAL_ID_MAX_LENGTH',
+      'createAppServerAuthenticator',
       'createJwtClientAuthenticator',
-      'createPreSharedKeyAuthenticator',
-      'isNamespace',
-      'parsePreSharedKeyConfig',
-      'validateAuthenticatedPrincipal',
+      'isAppId',
+      'parseRelayConfig',
+      'validateAuthenticatedAppServer',
       'validateClientJwtConfig',
-      'validatePreSharedKeyConfig',
+      'validateRelayConfig',
       'validateVerifiedClientIdentity'
     ].sort());
     expect(sortedExportKeys(serverRuntime)).toEqual(['createRelayServer']);
   });
 
-  it('documents an authenticated namespace relay instead of installable apps', () => {
+  it('documents an authenticated app relay instead of bundled apps', () => {
     const readme = source('README.md');
     const protocol = source('docs/communication-protocol.md');
 
-    expect(readme).toContain('authenticated first-level namespace router');
+    expect(readme).toContain('authenticated app router');
     expect(protocol).toContain('WebSocket endpoint');
     expect(protocol).toContain('/ws');
-    expect(protocol).toContain('namespace owner');
-    expect(protocol).toContain('namespace:accept');
+    expect(protocol).toContain('app server');
+    expect(protocol).toContain('app:accept');
     expect(protocol).toContain('server:packet');
     expect(readme).not.toContain('bundled apps');
     expect(protocol).not.toContain('installed app catalog');

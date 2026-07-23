@@ -5,15 +5,14 @@ import WebSocket from 'ws';
 import type { RelayClientAuthenticator } from '../../src/relay/auth.js';
 import { createRelayServer } from '../../src/relay/server.js';
 import type {
-  AuthenticationStateMessage,
-  NamespaceClaimedMessage,
-  NamespaceClientStateMessage,
-  NamespaceConnectMessage,
-  NamespaceDisconnectMessage,
+  AppClientStateMessage,
+  AppConnectMessage,
+  AppDisconnectMessage,
+  AppServerReadyMessage,
   RelayClientPacketMessage,
   RelayErrorMessage,
+  RelayOutboundMessage,
   RelayServerPacketMessage,
-  ServerMessage,
   VerifiedClientIdentity
 } from '../../src/relay/app.js';
 
@@ -24,10 +23,10 @@ function waitForOpen(socket: WebSocket) {
   });
 }
 
-function waitForMessage<T extends ServerMessage>(socket: WebSocket, type?: T['type']) {
+function waitForMessage<T extends RelayOutboundMessage>(socket: WebSocket, type?: T['type']) {
   return new Promise<T>((resolve) => {
     function handleMessage(data: WebSocket.RawData) {
-      const message = JSON.parse(data.toString()) as ServerMessage;
+      const message = JSON.parse(data.toString()) as RelayOutboundMessage;
       if (type && message.type !== type) return;
       socket.off('message', handleMessage);
       resolve(message as T);
@@ -36,7 +35,11 @@ function waitForMessage<T extends ServerMessage>(socket: WebSocket, type?: T['ty
   });
 }
 
-function expectNoMessage<T extends ServerMessage>(socket: WebSocket, type: T['type'], timeoutMs = 50) {
+function expectNoMessage<T extends RelayOutboundMessage>(
+  socket: WebSocket,
+  type: T['type'],
+  timeoutMs = 50
+) {
   return Promise.race([
     waitForMessage<T>(socket, type),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
@@ -70,10 +73,10 @@ type HealthResponse = {
   connections: number;
   clients: number;
   pendingClients: number;
-  claimedNamespaces: number;
+  connectedApps: number;
 };
 
-describe('citadel namespace relay', () => {
+describe('citadel app relay', () => {
   let server: ReturnType<typeof createRelayServer>;
   let url: string;
   let authenticateClient: RelayClientAuthenticator;
@@ -85,12 +88,12 @@ describe('citadel namespace relay', () => {
   beforeEach(async () => {
     authenticateClient = (token) => token === 'valid-client-jwt' ? clientIdentity : null;
     server = createRelayServer({
-      authenticateOwner(token) {
-        if (token === 'chat-owner-key') {
-          return { id: 'chat-server', name: 'chat-server', namespaceClaims: ['/chat'] };
+      authenticateAppServer(token) {
+        if (token === 'chat-server-key') {
+          return { appId: 'chat' };
         }
-        if (token === 'files-owner-key') {
-          return { id: 'files-server', name: 'files-server', namespaceClaims: ['/files'] };
+        if (token === 'files-server-key') {
+          return { appId: 'files' };
         }
         return null;
       },
@@ -118,127 +121,108 @@ describe('citadel namespace relay', () => {
     return socket;
   }
 
-  async function connectOwner(token: string) {
+  async function connectAppServer(token = 'chat-server-key') {
     const socket = await connectSocket();
-    const authenticated = waitForMessage<AuthenticationStateMessage>(socket, 'auth:state');
-    sendJson(socket, { type: 'auth:authenticate', token });
-    await authenticated;
+    const ready = waitForMessage<AppServerReadyMessage>(socket, 'app:ready');
+    sendJson(socket, { type: 'app:authenticate', token });
+    await ready;
     return socket;
-  }
-
-  async function claimOwner(token = 'chat-owner-key', namespace = '/chat') {
-    const owner = await connectOwner(token);
-    const claimed = waitForMessage<NamespaceClaimedMessage>(owner, 'namespace:claimed');
-    sendJson(owner, { type: 'namespace:claim', namespace });
-    expect(await claimed).toEqual({ type: 'namespace:claimed', namespace });
-    return owner;
   }
 
   async function openPending(
     client: WebSocket,
-    owner: WebSocket,
-    namespace = '/chat',
+    appServer: WebSocket,
+    appId = 'chat',
     hello: unknown = { resumeToken: null },
     credential: { type: 'jwt'; token: string } | null = {
       type: 'jwt',
       token: 'valid-client-jwt'
     }
   ) {
-    const pendingState = waitForMessage<NamespaceClientStateMessage>(client, 'namespace:state');
-    const connect = waitForMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const pendingState = waitForMessage<AppClientStateMessage>(client, 'app:state');
+    const connect = waitForMessage<AppConnectMessage>(appServer, 'app:connect');
     sendJson(client, {
-      type: 'namespace:open',
-      namespace,
+      type: 'app:open',
+      appId,
       ...(credential !== null ? { credential } : {}),
       hello
     });
     const [state, request] = await Promise.all([pendingState, connect]);
-    expect(state).toMatchObject({ type: 'namespace:state', namespace, state: 'pending' });
+    expect(state).toMatchObject({ type: 'app:state', state: 'pending' });
     expect(request).toMatchObject({
-      type: 'namespace:connect',
-      namespace,
+      type: 'app:connect',
       connectionId: state.connectionId,
       hello
     });
     return request;
   }
 
-  async function acceptPending(client: WebSocket, owner: WebSocket, requestId: string) {
-    const admitted = waitForMessage<NamespaceClientStateMessage>(client, 'namespace:state');
-    sendJson(owner, { type: 'namespace:accept', requestId });
+  async function acceptPending(client: WebSocket, appServer: WebSocket, requestId: string) {
+    const admitted = waitForMessage<AppClientStateMessage>(client, 'app:state');
+    sendJson(appServer, { type: 'app:accept', requestId });
     const state = await admitted;
     expect(state.state).toBe('admitted');
     return state;
   }
 
-  async function openAndAccept(client: WebSocket, owner: WebSocket, namespace = '/chat') {
-    const request = await openPending(client, owner, namespace);
-    return acceptPending(client, owner, request.requestId);
+  async function openAndAccept(client: WebSocket, appServer: WebSocket, appId = 'chat') {
+    const request = await openPending(client, appServer, appId);
+    return acceptPending(client, appServer, request.requestId);
   }
 
-  it('reports first-level router health', async () => {
+  it('reports app-router health', async () => {
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.7.0',
+      version: '0.8.0',
       connections: 0,
       clients: 0,
       pendingClients: 0,
-      claimedNamespaces: 0
+      connectedApps: 0
     });
   });
 
   it('requires a client authenticator at server construction', () => {
     expect(() => createRelayServer({
-      authenticateOwner: () => null
+      authenticateAppServer: () => null
     } as unknown as Parameters<typeof createRelayServer>[0])).toThrow(
       'requires an authenticateClient function'
     );
     expect(() => createRelayServer({
-      authenticateOwner: () => null,
+      authenticateAppServer: () => null,
       authenticateClient: () => null,
       authenticationTimeoutMs: 0
     })).toThrow('authenticationTimeoutMs must be a positive number');
   });
 
-  it('allows only an authorized app owner to claim an exclusive namespace', async () => {
-    const browser = await connectSocket();
-    const unauthenticated = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
-    const unauthenticatedClosed = new Promise<number>((resolve) => {
-      browser.once('close', (code) => resolve(code));
-    });
-    sendJson(browser, { type: 'namespace:claim', namespace: '/chat' });
-    expect((await unauthenticated).message).toBe('Authentication is required.');
-    expect(await unauthenticatedClosed).toBe(4401);
-
-    const invalidOwner = await connectSocket();
-    const invalid = waitForMessage<RelayErrorMessage>(invalidOwner, 'error:notice');
-    sendJson(invalidOwner, { type: 'auth:authenticate', token: 'wrong-key' });
+  it('registers exactly one configured app when its server authenticates', async () => {
+    const invalidAppServer = await connectSocket();
+    const invalid = waitForMessage<RelayErrorMessage>(invalidAppServer, 'error:notice');
+    sendJson(invalidAppServer, { type: 'app:authenticate', token: 'wrong-key' });
     expect((await invalid).message).toBe('Authentication failed.');
 
-    const owner = await claimOwner();
-    const unauthorizedPath = waitForMessage<RelayErrorMessage>(owner, 'error:notice');
-    sendJson(owner, { type: 'namespace:claim', namespace: '/files' });
-    expect((await unauthorizedPath).message).toBe('This app owner is not authorized for that namespace.');
+    const appServer = await connectSocket();
+    const ready = waitForMessage<AppServerReadyMessage>(appServer, 'app:ready');
+    sendJson(appServer, { type: 'app:authenticate', token: 'chat-server-key' });
+    expect(await ready).toEqual({ type: 'app:ready', appId: 'chat' });
 
-    const secondOwner = await connectOwner('chat-owner-key');
-    const duplicate = waitForMessage<RelayErrorMessage>(secondOwner, 'error:notice');
-    sendJson(secondOwner, { type: 'namespace:claim', namespace: '/chat' });
-    expect((await duplicate).message).toBe('Namespace is already claimed.');
+    const secondAppServer = await connectSocket();
+    const duplicate = waitForMessage<RelayErrorMessage>(secondAppServer, 'error:notice');
+    sendJson(secondAppServer, { type: 'app:authenticate', token: 'chat-server-key' });
+    expect((await duplicate).message).toBe('App already has a connected server.');
   });
 
   it('opens an identified pending tunnel for an app-owned handshake', async () => {
-    const owner = await claimOwner();
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    const request = await openPending(browser, owner, '/chat', { mode: 'member' });
+    const request = await openPending(browser, appServer, 'chat', { mode: 'member' });
     expect(request.identity).toEqual(clientIdentity);
 
-    const credentials = waitForMessage<RelayClientPacketMessage<{ token: string }>>(owner, 'client:packet');
+    const credentials = waitForMessage<RelayClientPacketMessage<{ token: string }>>(appServer, 'client:packet');
     sendJson(browser, { type: 'client:packet', payload: { token: 'app-owned-token' } });
     const credentialsMessage = await credentials;
     expect(credentialsMessage).toMatchObject({
       type: 'client:packet',
-      namespace: '/chat',
       from: {
         connectionId: request.connectionId,
         state: 'pending',
@@ -248,28 +232,26 @@ describe('citadel namespace relay', () => {
     });
 
     const challenge = waitForMessage<RelayServerPacketMessage<{ challenge: string }>>(browser, 'server:packet');
-    sendJson(owner, {
+    sendJson(appServer, {
       type: 'server:packet',
-      namespace: '/chat',
       target: { connectionId: request.connectionId },
       payload: { challenge: 'prove-session' }
     });
     expect(await challenge).toMatchObject({
       type: 'server:packet',
-      namespace: '/chat',
       payload: { challenge: 'prove-session' }
     });
 
-    await acceptPending(browser, owner, request.requestId);
+    await acceptPending(browser, appServer, request.requestId);
   });
 
   it('binds verified JWT identity to a pending client without performing admission', async () => {
-    const owner = await claimOwner();
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
     const request = await openPending(
       browser,
-      owner,
-      '/chat',
+      appServer,
+      'chat',
       {
         identity: {
           issuer: 'https://forged.example.com/',
@@ -280,21 +262,20 @@ describe('citadel namespace relay', () => {
     );
 
     expect(request.identity).toEqual(clientIdentity);
-    const noAutomaticAdmission = await expectNoMessage<NamespaceClientStateMessage>(
+    const noAutomaticAdmission = await expectNoMessage<AppClientStateMessage>(
       browser,
-      'namespace:state'
+      'app:state'
     );
     expect(noAutomaticAdmission).toBeNull();
 
     const packet = waitForMessage<RelayClientPacketMessage<{
       identity: { subject: string };
-    }>>(owner, 'client:packet');
+    }>>(appServer, 'client:packet');
     sendJson(browser, {
       type: 'client:packet',
       payload: { identity: { subject: 'attacker' } }
     });
     expect(await packet).toMatchObject({
-      namespace: '/chat',
       from: {
         connectionId: request.connectionId,
         state: 'pending',
@@ -303,25 +284,23 @@ describe('citadel namespace relay', () => {
       payload: { identity: { subject: 'attacker' } }
     });
 
-    await acceptPending(browser, owner, request.requestId);
+    await acceptPending(browser, appServer, request.requestId);
     const downstream = waitForMessage<RelayServerPacketMessage<{ body: string }>>(
       browser,
       'server:packet'
     );
-    sendJson(owner, {
+    sendJson(appServer, {
       type: 'server:packet',
-      namespace: '/chat',
       target: { connectionId: request.connectionId },
       payload: { body: 'welcome' }
     });
     expect(await downstream).toEqual({
       type: 'server:packet',
-      namespace: '/chat',
       payload: { body: 'welcome' }
     });
 
-    const disconnected = waitForMessage<NamespaceDisconnectMessage>(owner, 'namespace:disconnect');
-    sendJson(browser, { type: 'namespace:close' });
+    const disconnected = waitForMessage<AppDisconnectMessage>(appServer, 'app:disconnect');
+    sendJson(browser, { type: 'app:close' });
     expect(await disconnected).toMatchObject({
       connectionId: request.connectionId,
       admitted: true,
@@ -329,48 +308,48 @@ describe('citadel namespace relay', () => {
     });
   });
 
-  it('rejects an invalid supplied client credential before notifying the owner', async () => {
-    const owner = await claimOwner();
+  it('rejects an invalid supplied client credential before notifying the app server', async () => {
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const appServerConnect = expectNoMessage<AppConnectMessage>(appServer, 'app:connect');
     const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
     const closed = new Promise<number>((resolve) => {
       browser.once('close', (code) => resolve(code));
     });
 
     sendJson(browser, {
-      type: 'namespace:open',
-      namespace: '/chat',
+      type: 'app:open',
+      appId: 'chat',
       credential: { type: 'jwt', token: 'invalid-client-jwt' }
     });
 
     expect((await failed).message).toBe('Client authentication failed.');
     expect(await closed).toBe(4401);
-    expect(await ownerConnect).toBeNull();
+    expect(await appServerConnect).toBeNull();
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health.clients).toBe(0);
   });
 
-  it('rejects a client without a JWT before notifying the owner', async () => {
-    const owner = await claimOwner();
+  it('rejects a client without a JWT before notifying the app server', async () => {
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const appServerConnect = expectNoMessage<AppConnectMessage>(appServer, 'app:connect');
     const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
     const closed = new Promise<number>((resolve) => {
       browser.once('close', (code) => resolve(code));
     });
 
     sendJson(browser, {
-      type: 'namespace:open',
-      namespace: '/chat'
+      type: 'app:open',
+      appId: 'chat'
     });
 
     expect((await failed).message).toBe('Client authentication failed.');
     expect(await closed).toBe(4401);
-    expect(await ownerConnect).toBeNull();
+    expect(await appServerConnect).toBeNull();
   });
 
-  it('verifies identity before revealing namespace availability', async () => {
+  it('verifies identity before revealing app availability', async () => {
     const browser = await connectSocket();
     const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
     const closed = new Promise<number>((resolve) => {
@@ -378,8 +357,8 @@ describe('citadel namespace relay', () => {
     });
 
     sendJson(browser, {
-      type: 'namespace:open',
-      namespace: '/missing',
+      type: 'app:open',
+      appId: 'missing',
       credential: { type: 'jwt', token: 'invalid-client-jwt' }
     });
 
@@ -402,7 +381,7 @@ describe('citadel namespace relay', () => {
 
   it('closes a connection that does not authenticate before the setup deadline', async () => {
     const timeoutServer = createRelayServer({
-      authenticateOwner: () => null,
+      authenticateAppServer: () => null,
       authenticateClient: () => null,
       authenticationTimeoutMs: 20
     });
@@ -442,13 +421,13 @@ describe('citadel namespace relay', () => {
     authenticateClient = () => new Promise((resolve) => {
       completeAuthentication = resolve;
     });
-    const owner = await claimOwner();
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const appServerConnect = expectNoMessage<AppConnectMessage>(appServer, 'app:connect');
 
     sendJson(browser, {
-      type: 'namespace:open',
-      namespace: '/chat',
+      type: 'app:open',
+      appId: 'chat',
       credential: { type: 'jwt', token: 'delayed-client-jwt' }
     });
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -456,49 +435,47 @@ describe('citadel namespace relay', () => {
     const closed = new Promise<number>((resolve) => {
       browser.once('close', (code) => resolve(code));
     });
-    sendJson(browser, { type: 'namespace:open', namespace: '/chat' });
+    sendJson(browser, { type: 'app:open', appId: 'chat' });
     expect((await duplicate).message).toBe('Authentication is already in progress.');
     expect(await closed).toBe(4401);
 
     completeAuthentication?.(clientIdentity);
-    expect(await ownerConnect).toBeNull();
+    expect(await appServerConnect).toBeNull();
   });
 
-  it('lets the owner reject admission after relay-verified client identity', async () => {
-    const owner = await claimOwner();
+  it('lets the app server reject admission after relay-verified client identity', async () => {
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    const request = await openPending(browser, owner);
-    const rejected = waitForMessage<NamespaceClientStateMessage>(browser, 'namespace:state');
+    const request = await openPending(browser, appServer);
+    const rejected = waitForMessage<AppClientStateMessage>(browser, 'app:state');
 
-    sendJson(owner, {
-      type: 'namespace:reject',
+    sendJson(appServer, {
+      type: 'app:reject',
       requestId: request.requestId,
       message: 'Chat ACL denied this client.'
     });
     expect(await rejected).toMatchObject({
-      namespace: '/chat',
       state: 'rejected',
       message: 'Chat ACL denied this client.'
     });
 
     const cannotSend = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
     sendJson(browser, { type: 'client:packet', payload: 'after rejection' });
-    expect((await cannotSend).message).toBe('Only an open namespace client can send client packets.');
+    expect((await cannotSend).message).toBe('Only a connected app client can send client packets.');
   });
 
-  it('routes client packets only upstream to the namespace owner', async () => {
-    const owner = await claimOwner();
+  it('routes client packets only upstream to the app server', async () => {
+    const appServer = await connectAppServer();
     const ada = await connectSocket();
     const grace = await connectSocket();
-    const adaState = await openAndAccept(ada, owner);
-    await openAndAccept(grace, owner);
+    const adaState = await openAndAccept(ada, appServer);
+    await openAndAccept(grace, appServer);
 
-    const forOwner = waitForMessage<RelayClientPacketMessage<{ body: string }>>(owner, 'client:packet');
+    const forAppServer = waitForMessage<RelayClientPacketMessage<{ body: string }>>(appServer, 'client:packet');
     const forGrace = expectNoMessage<RelayServerPacketMessage>(grace, 'server:packet');
     sendJson(ada, { type: 'client:packet', payload: { body: 'hello' } });
 
-    expect(await forOwner).toMatchObject({
-      namespace: '/chat',
+    expect(await forAppServer).toMatchObject({
       from: { connectionId: adaState.connectionId, state: 'admitted' },
       payload: { body: 'hello' }
     });
@@ -507,11 +484,10 @@ describe('citadel namespace relay', () => {
     const forbiddenBroadcast = waitForMessage<RelayErrorMessage>(ada, 'error:notice');
     sendJson(ada, {
       type: 'server:packet',
-      namespace: '/chat',
       target: 'all',
       payload: 'forged broadcast'
     });
-    expect((await forbiddenBroadcast).message).toBe('Only an authenticated namespace owner can send server packets.');
+    expect((await forbiddenBroadcast).message).toBe('Only an authenticated app server can send server packets.');
 
     const forbiddenTarget = waitForMessage<RelayErrorMessage>(ada, 'error:notice');
     sendJson(ada, {
@@ -519,24 +495,23 @@ describe('citadel namespace relay', () => {
       target: { connectionId: 'another-client' },
       payload: 'forged target'
     });
-    expect((await forbiddenTarget).message).toBe('Client packets cannot specify a namespace or target.');
+    expect((await forbiddenTarget).message).toBe('Client packets cannot specify a target.');
   });
 
-  it('allows only the owner to unicast or broadcast downstream', async () => {
-    const owner = await claimOwner();
+  it('allows only the app server to unicast or broadcast downstream', async () => {
+    const appServer = await connectAppServer();
     const ada = await connectSocket();
     const grace = await connectSocket();
     const pending = await connectSocket();
-    const adaState = await openAndAccept(ada, owner);
-    await openAndAccept(grace, owner);
-    const pendingRequest = await openPending(pending, owner);
+    const adaState = await openAndAccept(ada, appServer);
+    await openAndAccept(grace, appServer);
+    const pendingRequest = await openPending(pending, appServer);
 
     const adaBroadcast = waitForMessage<RelayServerPacketMessage>(ada, 'server:packet');
     const graceBroadcast = waitForMessage<RelayServerPacketMessage>(grace, 'server:packet');
     const pendingBroadcast = expectNoMessage<RelayServerPacketMessage>(pending, 'server:packet');
-    sendJson(owner, {
+    sendJson(appServer, {
       type: 'server:packet',
-      namespace: '/chat',
       target: 'all',
       payload: 'admitted clients only'
     });
@@ -546,9 +521,8 @@ describe('citadel namespace relay', () => {
 
     const adaUnicast = waitForMessage<RelayServerPacketMessage>(ada, 'server:packet');
     const graceUnicast = expectNoMessage<RelayServerPacketMessage>(grace, 'server:packet');
-    sendJson(owner, {
+    sendJson(appServer, {
       type: 'server:packet',
-      namespace: '/chat',
       target: { connectionId: adaState.connectionId },
       payload: 'only Ada'
     });
@@ -556,116 +530,103 @@ describe('citadel namespace relay', () => {
     expect(await graceUnicast).toBeNull();
 
     const pendingHandshake = waitForMessage<RelayServerPacketMessage>(pending, 'server:packet');
-    sendJson(owner, {
+    sendJson(appServer, {
       type: 'server:packet',
-      namespace: '/chat',
       target: { connectionId: pendingRequest.connectionId },
       payload: 'pending handshake only'
     });
     expect((await pendingHandshake).payload).toBe('pending handshake only');
   });
 
-  it('prevents an owner from targeting another owner namespace', async () => {
-    const chatOwner = await claimOwner();
-    const filesOwner = await claimOwner('files-owner-key', '/files');
+  it('prevents an app server from targeting another app server client', async () => {
+    const chatAppServer = await connectAppServer();
+    const filesAppServer = await connectAppServer('files-server-key');
     const filesClient = await connectSocket();
-    const filesState = await openAndAccept(filesClient, filesOwner, '/files');
+    const filesState = await openAndAccept(filesClient, filesAppServer, 'files');
 
-    const wrongNamespace = waitForMessage<RelayErrorMessage>(chatOwner, 'error:notice');
-    sendJson(chatOwner, {
+    const wrongClient = waitForMessage<RelayErrorMessage>(chatAppServer, 'error:notice');
+    sendJson(chatAppServer, {
       type: 'server:packet',
-      namespace: '/files',
       target: { connectionId: filesState.connectionId },
       payload: 'cross-boundary'
     });
-    expect((await wrongNamespace).message).toBe('This connection does not own the packet namespace.');
-
-    const wrongClient = waitForMessage<RelayErrorMessage>(chatOwner, 'error:notice');
-    sendJson(chatOwner, {
-      type: 'server:packet',
-      namespace: '/chat',
-      target: { connectionId: filesState.connectionId },
-      payload: 'cross-boundary'
-    });
-    expect((await wrongClient).message).toBe('Packet target is not a client of this namespace owner.');
+    expect((await wrongClient).message).toBe('Packet target is not a client of this app server.');
   });
 
-  it('lets the owner revoke a client and observes explicit client closure', async () => {
-    const owner = await claimOwner();
+  it('lets the app server revoke a client and observes explicit client closure', async () => {
+    const appServer = await connectAppServer();
     const ada = await connectSocket();
     const grace = await connectSocket();
-    const adaState = await openAndAccept(ada, owner);
-    const graceState = await openAndAccept(grace, owner);
+    const adaState = await openAndAccept(ada, appServer);
+    const graceState = await openAndAccept(grace, appServer);
 
-    const revoked = waitForMessage<NamespaceClientStateMessage>(ada, 'namespace:state');
-    sendJson(owner, {
-      type: 'namespace:revoke',
+    const revoked = waitForMessage<AppClientStateMessage>(ada, 'app:state');
+    sendJson(appServer, {
+      type: 'app:revoke',
       connectionId: adaState.connectionId,
       message: 'Session expired.'
     });
     expect(await revoked).toMatchObject({ state: 'rejected', message: 'Session expired.' });
 
-    const disconnected = waitForMessage<NamespaceDisconnectMessage>(owner, 'namespace:disconnect');
-    sendJson(grace, { type: 'namespace:close' });
+    const disconnected = waitForMessage<AppDisconnectMessage>(appServer, 'app:disconnect');
+    sendJson(grace, { type: 'app:close' });
     expect(await disconnected).toMatchObject({
-      namespace: '/chat',
       connectionId: graceState.connectionId,
       admitted: true,
       reason: 'client-closed'
     });
   });
 
-  it('closes all clients when their namespace owner disconnects', async () => {
-    const owner = await claimOwner();
+  it('closes all clients when their app server disconnects', async () => {
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    await openAndAccept(browser, owner);
+    await openAndAccept(browser, appServer);
 
-    const closed = waitForMessage<NamespaceClientStateMessage>(browser, 'namespace:state');
-    owner.close();
+    const closed = waitForMessage<AppClientStateMessage>(browser, 'app:state');
+    appServer.close();
     expect(await closed).toMatchObject({
-      namespace: '/chat',
       state: 'closed',
-      message: 'The namespace owner is unavailable.'
+      message: 'The app server is unavailable.'
     });
 
     const cannotSend = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
-    sendJson(browser, { type: 'client:packet', payload: 'after owner disconnect' });
-    expect((await cannotSend).message).toBe('Only an open namespace client can send client packets.');
+    sendJson(browser, { type: 'client:packet', payload: 'after app server disconnect' });
+    expect((await cannotSend).message).toBe('Only a connected app client can send client packets.');
   });
 
-  it('updates health for claimed namespaces and admitted clients', async () => {
-    const owner = await claimOwner();
+  it('updates health for connected apps and admitted clients', async () => {
+    const appServer = await connectAppServer();
     const browser = await connectSocket();
-    await openAndAccept(browser, owner);
+    await openAndAccept(browser, appServer);
 
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.7.0',
+      version: '0.8.0',
       connections: 2,
       clients: 1,
       pendingClients: 0,
-      claimedNamespaces: 1
+      connectedApps: 1
     });
   });
 
   it('reports malformed and unknown protocol input', async () => {
-    const owner = await claimOwner();
-    const malformed = waitForMessage<RelayErrorMessage>(owner, 'error:notice');
-    owner.send('not-json');
+    const appServer = await connectAppServer();
+    const malformed = waitForMessage<RelayErrorMessage>(appServer, 'error:notice');
+    appServer.send('not-json');
     expect((await malformed).message).toBe('Messages must be valid JSON.');
 
-    const unknown = waitForMessage<RelayErrorMessage>(owner, 'error:notice');
-    sendJson(owner, { type: 'made:up' });
+    const unknown = waitForMessage<RelayErrorMessage>(appServer, 'error:notice');
+    sendJson(appServer, { type: 'made:up' });
     expect((await unknown).message).toBe('Unknown message type.');
 
     const client = await connectSocket();
-    const deepNamespace = waitForMessage<RelayErrorMessage>(client, 'error:notice');
+    const deepApp = waitForMessage<RelayErrorMessage>(client, 'error:notice');
     sendJson(client, {
-      type: 'namespace:open',
-      namespace: '/chat/private',
+      type: 'app:open',
+      appId: 'chat/private',
       credential: { type: 'jwt', token: 'valid-client-jwt' }
     });
-    expect((await deepNamespace).message).toBe('Namespace must be a first-level lowercase path such as "/chat".');
+    expect((await deepApp).message).toBe('App ID must be a lowercase identifier such as "chat".');
   });
 });

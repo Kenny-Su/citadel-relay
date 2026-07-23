@@ -1,13 +1,9 @@
-export const NAMESPACE_MAX_LENGTH = 128;
-export const NAMESPACE_PATTERN = /^\/[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
+export const APP_ID_MAX_LENGTH = 128;
+export const APP_ID_PATTERN = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 
-export type AuthenticatedPrincipal = {
-  id: string;
-  name?: string;
-  namespaceClaims?: string[];
+export type AuthenticatedAppServer = {
+  appId: string;
 };
-
-export type PublicPrincipal = Pick<AuthenticatedPrincipal, 'id' | 'name'>;
 
 export type VerifiedClientIdentity = {
   subject: string;
@@ -22,47 +18,37 @@ export type ConnectionTarget = {
   connectionId: string;
 };
 
-export type ClientState = 'pending' | 'admitted';
+export type AppClientState = 'pending' | 'admitted';
 
-export type AuthenticateMessage = {
-  type: 'auth:authenticate';
+export type AppServerAuthenticateMessage = {
+  type: 'app:authenticate';
   token: string;
 };
 
-export type ClaimNamespaceMessage = {
-  type: 'namespace:claim';
-  namespace: string;
-};
-
-export type ReleaseNamespaceMessage = {
-  type: 'namespace:release';
-  namespace: string;
-};
-
-export type OpenNamespaceMessage<THello = unknown> = {
-  type: 'namespace:open';
-  namespace: string;
+export type OpenAppMessage<THello = unknown> = {
+  type: 'app:open';
+  appId: string;
   credential: JwtClientCredential;
   hello?: THello;
 };
 
-export type CloseNamespaceMessage = {
-  type: 'namespace:close';
+export type CloseAppMessage = {
+  type: 'app:close';
 };
 
-export type AcceptNamespaceClientMessage = {
-  type: 'namespace:accept';
+export type AcceptAppClientMessage = {
+  type: 'app:accept';
   requestId: string;
 };
 
-export type RejectNamespaceClientMessage = {
-  type: 'namespace:reject';
+export type RejectAppClientMessage = {
+  type: 'app:reject';
   requestId: string;
   message?: string;
 };
 
-export type RevokeNamespaceClientMessage = {
-  type: 'namespace:revoke';
+export type RevokeAppClientMessage = {
+  type: 'app:revoke';
   connectionId: string;
   message?: string;
 };
@@ -76,53 +62,42 @@ export type ServerPacketTarget = 'all' | ConnectionTarget;
 
 export type ServerPacketMessage<TPayload = unknown> = {
   type: 'server:packet';
-  namespace: string;
   target: ServerPacketTarget;
   payload?: TPayload;
 };
 
-export type ClientMessage<TPayload = unknown> =
-  | AuthenticateMessage
-  | ClaimNamespaceMessage
-  | ReleaseNamespaceMessage
-  | OpenNamespaceMessage
-  | CloseNamespaceMessage
-  | AcceptNamespaceClientMessage
-  | RejectNamespaceClientMessage
-  | RevokeNamespaceClientMessage
+export type RelayInboundMessage<TPayload = unknown> =
+  | AppServerAuthenticateMessage
+  | OpenAppMessage
+  | CloseAppMessage
+  | AcceptAppClientMessage
+  | RejectAppClientMessage
+  | RevokeAppClientMessage
   | ClientPacketMessage<TPayload>
   | ServerPacketMessage<TPayload>;
 
-export type AuthenticationStateMessage = {
-  type: 'auth:state';
-  principal: PublicPrincipal;
+export type AppServerReadyMessage = {
+  type: 'app:ready';
+  appId: string;
 };
 
-export type NamespaceClaimedMessage = {
-  type: 'namespace:claimed' | 'namespace:released';
-  namespace: string;
-};
-
-export type NamespaceClientStateMessage = {
-  type: 'namespace:state';
-  namespace: string;
+export type AppClientStateMessage = {
+  type: 'app:state';
   state: 'pending' | 'admitted' | 'rejected' | 'closed';
   connectionId: string;
   message?: string;
 };
 
-export type NamespaceConnectMessage<THello = unknown> = {
-  type: 'namespace:connect';
+export type AppConnectMessage<THello = unknown> = {
+  type: 'app:connect';
   requestId: string;
-  namespace: string;
   connectionId: string;
   identity: VerifiedClientIdentity;
   hello?: THello;
 };
 
-export type NamespaceDisconnectMessage = {
-  type: 'namespace:disconnect';
-  namespace: string;
+export type AppDisconnectMessage = {
+  type: 'app:disconnect';
   connectionId: string;
   admitted: boolean;
   reason: 'client-closed' | 'client-disconnected' | 'admission-timeout';
@@ -131,10 +106,9 @@ export type NamespaceDisconnectMessage = {
 
 export type RelayClientPacketMessage<TPayload = unknown> = {
   type: 'client:packet';
-  namespace: string;
   from: {
     connectionId: string;
-    state: ClientState;
+    state: AppClientState;
     identity: VerifiedClientIdentity;
   };
   payload?: TPayload;
@@ -142,7 +116,6 @@ export type RelayClientPacketMessage<TPayload = unknown> = {
 
 export type RelayServerPacketMessage<TPayload = unknown> = {
   type: 'server:packet';
-  namespace: string;
   payload?: TPayload;
 };
 
@@ -151,18 +124,17 @@ export type RelayErrorMessage = {
   message: string;
 };
 
-export type ServerMessage<TPayload = unknown> =
-  | AuthenticationStateMessage
-  | NamespaceClaimedMessage
-  | NamespaceClientStateMessage
-  | NamespaceConnectMessage
-  | NamespaceDisconnectMessage
+export type RelayOutboundMessage<TPayload = unknown> =
+  | AppServerReadyMessage
+  | AppClientStateMessage
+  | AppConnectMessage
+  | AppDisconnectMessage
   | RelayClientPacketMessage<TPayload>
   | RelayServerPacketMessage<TPayload>
   | RelayErrorMessage;
 
-export function isNamespace(value: unknown): value is string {
+export function isAppId(value: unknown): value is string {
   return typeof value === 'string'
-    && value.length <= NAMESPACE_MAX_LENGTH
-    && NAMESPACE_PATTERN.test(value);
+    && value.length <= APP_ID_MAX_LENGTH
+    && APP_ID_PATTERN.test(value);
 }

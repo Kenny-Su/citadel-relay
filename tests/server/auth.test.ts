@@ -15,12 +15,12 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PRE_SHARED_KEY_BYTES,
+  createAppServerAuthenticator,
   createJwtClientAuthenticator,
-  createPreSharedKeyAuthenticator,
-  parsePreSharedKeyConfig,
-  validateAuthenticatedPrincipal,
+  parseRelayConfig,
+  validateAuthenticatedAppServer,
   validateClientJwtConfig,
-  validatePreSharedKeyConfig,
+  validateRelayConfig,
   validateVerifiedClientIdentity
 } from '../../src/relay/auth.js';
 
@@ -75,29 +75,26 @@ async function signClientJwt(
 }
 
 describe('relay authentication', () => {
-  it('authenticates an app owner with an exact 256-bit pre-shared key', async () => {
+  it('authenticates an app server with an exact 256-bit pre-shared key', async () => {
     const chatKey = testKey(1);
-    const authenticate = createPreSharedKeyAuthenticator({
+    const authenticate = createAppServerAuthenticator({
       apps: [{
-        name: 'chat-server',
         preSharedKey: chatKey,
-        claimedPath: '/chat'
+        appId: 'chat'
       }]
     });
 
     expect(await authenticate(chatKey)).toEqual({
-      id: 'chat-server',
-      name: 'chat-server',
-      namespaceClaims: ['/chat']
+      appId: 'chat'
     });
     expect(await authenticate(testKey(2))).toBeNull();
     expect(await authenticate('not-a-key')).toBeNull();
   });
 
-  it('parses app config and rejects invalid or ambiguous ownership', () => {
+  it('parses app config and rejects invalid or duplicate app mappings', () => {
     const key = testKey(3);
-    expect(parsePreSharedKeyConfig(JSON.stringify({
-      apps: [{ name: 'chat-server', preSharedKey: key, claimedPath: '/chat' }],
+    expect(parseRelayConfig(JSON.stringify({
+      apps: [{ preSharedKey: key, appId: 'chat' }],
       clientJwt: {
         issuer: 'https://identity.example.com/',
         audience: 'citadel-relay',
@@ -105,7 +102,7 @@ describe('relay authentication', () => {
         algorithm: 'RS256'
       }
     }))).toEqual({
-      apps: [{ name: 'chat-server', preSharedKey: key, claimedPath: '/chat' }],
+      apps: [{ preSharedKey: key, appId: 'chat' }],
       clientJwt: {
         issuer: 'https://identity.example.com/',
         audience: 'citadel-relay',
@@ -114,24 +111,26 @@ describe('relay authentication', () => {
       }
     });
 
-    expect(() => parsePreSharedKeyConfig('[]')).toThrow('apps array');
-    expect(() => validatePreSharedKeyConfig({ apps: [] })).toThrow('non-empty');
-    expect(() => validatePreSharedKeyConfig({
-      apps: [{ name: 'chat-server', preSharedKey: 'too-short', claimedPath: '/chat' }]
+    expect(() => parseRelayConfig('[]')).toThrow('apps array');
+    expect(() => validateRelayConfig({ apps: [] })).toThrow('non-empty');
+    expect(() => validateRelayConfig({
+      apps: [{ preSharedKey: 'too-short', appId: 'chat' }]
     })).toThrow('32 random bytes');
-    expect(() => validatePreSharedKeyConfig({
+    expect(() => createAppServerAuthenticator({
+      apps: [{ preSharedKey: testKey(7), appId: '/chat' }]
+    })).toThrow('lowercase identifiers');
+    expect(() => validateRelayConfig({
       apps: [
-        { name: 'chat-server', preSharedKey: testKey(4), claimedPath: '/chat' },
-        { name: 'other-server', preSharedKey: testKey(5), claimedPath: '/chat' }
+        { preSharedKey: testKey(4), appId: 'chat' },
+        { preSharedKey: testKey(5), appId: 'chat' }
       ]
-    })).toThrow('assigned more than once');
-    expect(() => validatePreSharedKeyConfig({
-      apps: [{ name: 'chat-server', preSharedKey: testKey(6), claimedPath: '/chat' }]
+    })).toThrow('configured more than once');
+    expect(() => validateRelayConfig({
+      apps: [{ preSharedKey: testKey(6), appId: 'chat' }]
     })).toThrow('Client JWT configuration must be an object');
-    expect(() => validateAuthenticatedPrincipal({
-      id: 'server',
-      namespaceClaims: ['/chat/deep']
-    })).toThrow('valid namespace paths');
+    expect(() => validateAuthenticatedAppServer({
+      appId: 'chat/deep'
+    })).toThrow('valid app ID');
     expect(() => validateClientJwtConfig({
       issuer: 'https://identity.example.com/',
       audience: 'citadel-relay',

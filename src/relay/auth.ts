@@ -2,13 +2,13 @@ import { createPublicKey, timingSafeEqual, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { jwtVerify } from 'jose';
 import type {
-  AuthenticatedPrincipal,
+  AuthenticatedAppServer,
   VerifiedClientIdentity
 } from './shared.js';
-import { isNamespace } from './shared.js';
+import { isAppId } from './shared.js';
 
 export const AUTH_TOKEN_MAX_LENGTH = 8_192;
-export const PRINCIPAL_ID_MAX_LENGTH = 256;
+export const CLIENT_SUBJECT_MAX_LENGTH = 256;
 export const PRE_SHARED_KEY_BYTES = 32;
 export const PRE_SHARED_KEY_ENCODED_LENGTH = 64;
 export const CLIENT_JWT_CLOCK_TOLERANCE_SECONDS = 5;
@@ -29,18 +29,17 @@ const ASYMMETRIC_JWT_ALGORITHMS = new Set([
   'EdDSA'
 ]);
 
-export type RelayAuthenticator = (
+export type RelayAppServerAuthenticator = (
   token: string
-) => AuthenticatedPrincipal | null | Promise<AuthenticatedPrincipal | null>;
+) => AuthenticatedAppServer | null | Promise<AuthenticatedAppServer | null>;
 
 export type RelayClientAuthenticator = (
   token: string
 ) => VerifiedClientIdentity | null | Promise<VerifiedClientIdentity | null>;
 
-export type AppOwnerConfig = {
-  name: string;
+export type AppServerConfig = {
+  appId: string;
   preSharedKey: string;
-  claimedPath: string;
 };
 
 export type ClientJwtConfig = {
@@ -50,29 +49,27 @@ export type ClientJwtConfig = {
   algorithm: string;
 };
 
-export type AppOwnerPreSharedKeyConfig = {
-  apps: AppOwnerConfig[];
+export type AppServerKeyConfig = {
+  apps: AppServerConfig[];
 };
 
-export type PreSharedKeyConfig = AppOwnerPreSharedKeyConfig & {
+export type RelayConfig = AppServerKeyConfig & {
   clientJwt: ClientJwtConfig;
 };
 
 type PreSharedKeyEntry = {
   key: Buffer;
-  principal: AuthenticatedPrincipal;
+  appServer: AuthenticatedAppServer;
 };
 
-export function createPreSharedKeyAuthenticator(
-  config: AppOwnerPreSharedKeyConfig
-): RelayAuthenticator {
-  const apps = validateAppOwnerConfig(config);
+export function createAppServerAuthenticator(
+  config: AppServerKeyConfig
+): RelayAppServerAuthenticator {
+  const apps = validateAppServerConfig(config);
   const entries: PreSharedKeyEntry[] = apps.map((configured) => ({
     key: decodePreSharedKey(configured.preSharedKey) as Buffer,
-    principal: {
-      id: configured.name,
-      name: configured.name,
-      namespaceClaims: [configured.claimedPath]
+    appServer: {
+      appId: configured.appId
     }
   }));
 
@@ -80,13 +77,13 @@ export function createPreSharedKeyAuthenticator(
     const presentedKey = decodePreSharedKey(token);
     if (!presentedKey) return null;
 
-    let matchedPrincipal: AuthenticatedPrincipal | null = null;
+    let matchedAppServer: AuthenticatedAppServer | null = null;
     for (const entry of entries) {
       if (timingSafeEqual(presentedKey, entry.key)) {
-        matchedPrincipal = entry.principal;
+        matchedAppServer = entry.appServer;
       }
     }
-    return matchedPrincipal;
+    return matchedAppServer;
   };
 }
 
@@ -114,7 +111,7 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
 
       if (
         typeof payload.iss !== 'string'
-        || !isValidPrincipalId(payload.sub)
+        || !isValidClientSubject(payload.sub)
         || typeof payload.exp !== 'number'
       ) {
         return null;
@@ -129,7 +126,7 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
   };
 }
 
-export function parsePreSharedKeyConfig(input: string): PreSharedKeyConfig {
+export function parseRelayConfig(input: string): RelayConfig {
   let parsed: unknown;
 
   try {
@@ -138,11 +135,11 @@ export function parsePreSharedKeyConfig(input: string): PreSharedKeyConfig {
     throw new Error('Relay config must be valid JSON.');
   }
 
-  return validatePreSharedKeyConfig(parsed);
+  return validateRelayConfig(parsed);
 }
 
-export function validatePreSharedKeyConfig(input: unknown): PreSharedKeyConfig {
-  const apps = validateAppOwnerConfig(input);
+export function validateRelayConfig(input: unknown): RelayConfig {
+  const apps = validateAppServerConfig(input);
   if (!isRecord(input)) {
     throw new Error('Relay config must be an object.');
   }
@@ -153,25 +150,24 @@ export function validatePreSharedKeyConfig(input: unknown): PreSharedKeyConfig {
   };
 }
 
-function validateAppOwnerConfig(input: unknown): AppOwnerConfig[] {
+function validateAppServerConfig(input: unknown): AppServerConfig[] {
   if (!isRecord(input) || !Array.isArray(input.apps) || input.apps.length === 0) {
     throw new Error('Relay config must contain a non-empty apps array.');
   }
 
-  const names = new Set<string>();
   const keys = new Set<string>();
-  const claimedPaths = new Set<string>();
-  const apps = input.apps.map((value): AppOwnerConfig => {
+  const appIds = new Set<string>();
+  const apps = input.apps.map((value): AppServerConfig => {
     if (!isRecord(value)) {
-      throw new Error('Each pre-shared-key app must be an object.');
+      throw new Error('Each app must be an object.');
     }
 
-    const principal = validateAuthenticatedPrincipal({
-      id: value.name,
-      name: value.name
-    });
+    const appId = value.appId;
     const preSharedKey = value.preSharedKey;
-    const claimedPath = value.claimedPath;
+
+    if (!isAppId(appId)) {
+      throw new Error('App IDs must be lowercase identifiers such as "chat".');
+    }
 
     if (typeof preSharedKey !== 'string' || !decodePreSharedKey(preSharedKey)) {
       throw new Error(
@@ -179,32 +175,37 @@ function validateAppOwnerConfig(input: unknown): AppOwnerConfig[] {
       );
     }
 
-    if (!isNamespace(claimedPath)) {
-      throw new Error('Claimed paths must be absolute lowercase namespace paths such as "/chat".');
-    }
-
-    if (names.has(principal.id)) {
-      throw new Error(`Duplicate app name: ${principal.id}`);
+    if (appIds.has(appId)) {
+      throw new Error(`App ID is configured more than once: ${appId}`);
     }
     if (keys.has(preSharedKey)) {
       throw new Error('Each app must have a unique pre-shared key.');
     }
-    if (claimedPaths.has(claimedPath)) {
-      throw new Error(`Claimed path is assigned more than once: ${claimedPath}`);
-    }
 
-    names.add(principal.id);
+    appIds.add(appId);
     keys.add(preSharedKey);
-    claimedPaths.add(claimedPath);
 
     return {
-      name: principal.id,
-      preSharedKey,
-      claimedPath
+      appId,
+      preSharedKey
     };
   });
 
   return apps;
+}
+
+export function validateAuthenticatedAppServer(input: unknown): AuthenticatedAppServer {
+  if (!isRecord(input)) {
+    throw new Error('App-server authentication must return an object.');
+  }
+
+  if (!isAppId(input.appId)) {
+    throw new Error('Authenticated app servers must return a valid app ID.');
+  }
+
+  return {
+    appId: input.appId
+  };
 }
 
 export function validateClientJwtConfig(input: unknown): ClientJwtConfig {
@@ -234,43 +235,14 @@ export function validateClientJwtConfig(input: unknown): ClientJwtConfig {
   };
 }
 
-export function validateAuthenticatedPrincipal(input: unknown): AuthenticatedPrincipal {
-  if (!isRecord(input)) {
-    throw new Error('Authentication must return a principal object.');
-  }
-
-  if (
-    !isValidPrincipalId(input.id)
-  ) {
-    throw new Error(`Principal ids must be between 1 and ${PRINCIPAL_ID_MAX_LENGTH} characters without control characters.`);
-  }
-
-  if (input.name !== undefined && typeof input.name !== 'string') {
-    throw new Error('Principal names must be strings when present.');
-  }
-
-  if (
-    input.namespaceClaims !== undefined
-    && (!Array.isArray(input.namespaceClaims) || !input.namespaceClaims.every(isNamespace))
-  ) {
-    throw new Error('Principal namespace claims must be valid namespace paths.');
-  }
-
-  return {
-    id: input.id,
-    ...(input.name !== undefined ? { name: input.name } : {}),
-    ...(input.namespaceClaims !== undefined ? { namespaceClaims: [...input.namespaceClaims] } : {})
-  };
-}
-
 export function validateVerifiedClientIdentity(input: unknown): VerifiedClientIdentity {
   if (!isRecord(input)) {
     throw new Error('Client authentication must return an identity object.');
   }
 
-  if (!isValidPrincipalId(input.subject)) {
+  if (!isValidClientSubject(input.subject)) {
     throw new Error(
-      `Client identity subjects must be between 1 and ${PRINCIPAL_ID_MAX_LENGTH} characters without control characters.`
+      `Client identity subjects must be between 1 and ${CLIENT_SUBJECT_MAX_LENGTH} characters without control characters.`
     );
   }
 
@@ -320,10 +292,10 @@ function loadPublicKey(publicKeyPath: string): KeyObject {
   }
 }
 
-function isValidPrincipalId(value: unknown): value is string {
+function isValidClientSubject(value: unknown): value is string {
   return typeof value === 'string'
     && value.length > 0
-    && value.length <= PRINCIPAL_ID_MAX_LENGTH
+    && value.length <= CLIENT_SUBJECT_MAX_LENGTH
     && !/[\u0000-\u001f\u007f]/.test(value);
 }
 

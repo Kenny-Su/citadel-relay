@@ -1,19 +1,19 @@
 import { readFileSync } from 'node:fs';
 import {
+  createAppServerAuthenticator,
   createJwtClientAuthenticator,
-  createPreSharedKeyAuthenticator,
-  parsePreSharedKeyConfig
+  parseRelayConfig
 } from '../relay/auth.js';
 import { createRelayServer } from '../relay/server.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CONFIG_PATH = process.env.RELAY_CONFIG_PATH ?? 'relay.config.json';
 
-const config = parsePreSharedKeyConfig(readFileSync(CONFIG_PATH, 'utf8'));
-const authenticateOwner = createPreSharedKeyAuthenticator(config);
+const config = parseRelayConfig(readFileSync(CONFIG_PATH, 'utf8'));
+const authenticateAppServer = createAppServerAuthenticator(config);
 const authenticateClient = createJwtClientAuthenticator(config.clientJwt);
 const { httpServer } = createRelayServer({
-  authenticateOwner,
+  authenticateAppServer,
   authenticateClient
 });
 

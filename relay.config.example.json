@@ -1,9 +1,8 @@
 {
   "apps": [
     {
-      "name": "app",
       "preSharedKey": "REPLACE_WITH_OUTPUT_OF_OPENSSL_RAND_HEX_32",
-      "claimedPath": "/app"
+      "appId": "app"
     }
   ],
   "clientJwt": {
