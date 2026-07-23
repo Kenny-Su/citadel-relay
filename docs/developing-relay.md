@@ -7,7 +7,9 @@ The reusable router lives under `src/relay`:
 - `server.ts`: namespace claims, pending tunnels, admission state, and packet routing.
 - `trafficLog.ts`: opt-in routing diagnostics.
 
-Process startup lives in `src/server/index.ts`. The untracked `relay.config.json` contains app-owner keys, exact claimed paths, and required global client JWT issuer/JWKS settings.
+Process startup lives in `src/server/index.ts`. The untracked `relay.config.json`
+contains app-owner keys, exact claimed paths, and the required global client JWT
+issuer, audience, local public-key path, and fixed signing algorithm.
 
 Verify changes with:
 

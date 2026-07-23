@@ -14,12 +14,20 @@ Create a 256-bit app-owner key:
 openssl rand -hex 32
 ```
 
-Copy the example and replace its placeholder with the generated 64-character lowercase hexadecimal value:
+Create an RSA key pair for client JWTs. Keep the private key only with the
+trusted process that authenticates clients and issues tokens:
+
+```bash
+openssl genrsa -out client-jwt-private.pem 2048
+openssl rsa -in client-jwt-private.pem -pubout -out client-jwt-public.pem
+```
+
+Copy the example and replace its app-owner key placeholder with the generated
+64-character lowercase hexadecimal value:
 
 ```bash
 cp relay.config.example.json relay.config.json
 npm install
-npm run dev:issuer -- dev-user
 npm run dev
 ```
 
@@ -33,17 +41,32 @@ npm run dev
     }
   ],
   "clientJwt": {
-    "issuer": "http://127.0.0.1:4000/",
+    "issuer": "citadel-local",
     "audience": "citadel-relay",
-    "jwksUri": "http://127.0.0.1:4000/jwks.json",
-    "algorithms": ["RS256"]
+    "publicKeyPath": "./client-jwt-public.pem",
+    "algorithm": "RS256"
   }
 }
 ```
 
-`relay.config.json` is ignored by Git. App names, keys, and claimed paths must be unique. Claimed paths are exact, first-level lowercase paths. The required `clientJwt` block applies to every namespace. Its JWKS URI must use HTTPS, except for loopback development URLs, and its algorithm list accepts only supported asymmetric signing algorithms.
+`relay.config.json` and both generated key files are ignored by Git. App names,
+keys, and claimed paths must be unique. Claimed paths are exact, first-level
+lowercase paths. The required `clientJwt` block applies to every namespace.
+Citadel loads the SPKI public key once at startup and accepts only the configured
+asymmetric algorithm. A relative `publicKeyPath` is resolved from the process
+working directory.
 
-`dev:issuer` prints a one-hour JWT and serves its public key at `http://127.0.0.1:4000/jwks.json`. It creates a new in-memory key each time it starts.
+After `npm install`, create a one-hour development token with one Node command.
+The project already depends on `jose`:
+
+```bash
+node --input-type=module -e 'import{readFileSync}from"node:fs";import{importPKCS8,SignJWT}from"jose";const key=await importPKCS8(readFileSync("client-jwt-private.pem","utf8"),"RS256");console.log(await new SignJWT({}).setProtectedHeader({alg:"RS256"}).setIssuer("citadel-local").setAudience("citadel-relay").setSubject(process.argv[1]??"dev-user").setIssuedAt().setExpirationTime("1h").sign(key))' dev-user
+```
+
+The issuer and audience in a token must exactly match `relay.config.json`.
+Production token issuance belongs in a trusted application backend after it
+authenticates the user. Never put the private key in Citadel or distribute it to
+clients.
 
 The HTTP server runs at `http://localhost:3001`. The WebSocket endpoint is `ws://localhost:3001/ws`.
 

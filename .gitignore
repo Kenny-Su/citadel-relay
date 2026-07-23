@@ -2,5 +2,7 @@ node_modules/
 dist/
 .env
 relay.config.json
+client-jwt-private.pem
+client-jwt-public.pem
 .DS_Store
 npm-debug.log*

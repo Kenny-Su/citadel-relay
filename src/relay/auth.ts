@@ -1,5 +1,6 @@
-import { timingSafeEqual } from 'node:crypto';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createPublicKey, timingSafeEqual, type KeyObject } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { jwtVerify } from 'jose';
 import type {
   AuthenticatedPrincipal,
   VerifiedClientIdentity
@@ -13,6 +14,8 @@ export const PRE_SHARED_KEY_ENCODED_LENGTH = 64;
 export const CLIENT_JWT_CLOCK_TOLERANCE_SECONDS = 5;
 
 const PRE_SHARED_KEY_PATTERN = /^[0-9a-f]{64}$/;
+const PUBLIC_KEY_PEM_PATTERN =
+  /^-----BEGIN PUBLIC KEY-----\r?\n(?:[A-Za-z0-9+/=]+\r?\n)+-----END PUBLIC KEY-----$/;
 const ASYMMETRIC_JWT_ALGORITHMS = new Set([
   'RS256',
   'RS384',
@@ -43,8 +46,8 @@ export type AppOwnerConfig = {
 export type ClientJwtConfig = {
   issuer: string;
   audience: string;
-  jwksUri: string;
-  algorithms: string[];
+  publicKeyPath: string;
+  algorithm: string;
 };
 
 export type AppOwnerPreSharedKeyConfig = {
@@ -89,7 +92,7 @@ export function createPreSharedKeyAuthenticator(
 
 export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClientAuthenticator {
   const validated = validateClientJwtConfig(config);
-  const jwks = createRemoteJWKSet(new URL(validated.jwksUri));
+  const publicKey = loadPublicKey(validated.publicKeyPath);
 
   return async (token) => {
     if (
@@ -101,10 +104,10 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
     }
 
     try {
-      const { payload } = await jwtVerify(token, jwks, {
+      const { payload } = await jwtVerify(token, publicKey, {
         issuer: validated.issuer,
         audience: validated.audience,
-        algorithms: validated.algorithms,
+        algorithms: [validated.algorithm],
         clockTolerance: CLIENT_JWT_CLOCK_TOLERANCE_SECONDS,
         requiredClaims: ['sub', 'exp']
       });
@@ -211,27 +214,23 @@ export function validateClientJwtConfig(input: unknown): ClientJwtConfig {
 
   const issuer = validateNonEmptyString(input.issuer, 'Client JWT issuer');
   const audience = validateNonEmptyString(input.audience, 'Client JWT audience');
-  const jwksUri = validateJwksUri(input.jwksUri);
+  const publicKeyPath = validateNonEmptyString(
+    input.publicKeyPath,
+    'Client JWT public key path'
+  );
 
   if (
-    !Array.isArray(input.algorithms)
-    || input.algorithms.length === 0
-    || !input.algorithms.every(
-      (algorithm) => typeof algorithm === 'string' && ASYMMETRIC_JWT_ALGORITHMS.has(algorithm)
-    )
+    typeof input.algorithm !== 'string'
+    || !ASYMMETRIC_JWT_ALGORITHMS.has(input.algorithm)
   ) {
-    throw new Error('Client JWT algorithms must be a non-empty list of supported asymmetric algorithms.');
-  }
-
-  if (new Set(input.algorithms).size !== input.algorithms.length) {
-    throw new Error('Client JWT algorithms must not contain duplicates.');
+    throw new Error('Client JWT algorithm must be a supported asymmetric algorithm.');
   }
 
   return {
     issuer,
     audience,
-    jwksUri,
-    algorithms: [...input.algorithms]
+    publicKeyPath,
+    algorithm: input.algorithm
   };
 }
 
@@ -302,23 +301,23 @@ function validateNonEmptyString(value: unknown, label: string) {
   return value;
 }
 
-function validateJwksUri(value: unknown) {
-  const jwksUri = validateNonEmptyString(value, 'Client JWT JWKS URI');
-  let url: URL;
+function loadPublicKey(publicKeyPath: string): KeyObject {
+  let pem: string;
+  try {
+    pem = readFileSync(publicKeyPath, 'utf8').trim();
+  } catch {
+    throw new Error(`Could not read Client JWT public key at "${publicKeyPath}".`);
+  }
+
+  if (!PUBLIC_KEY_PEM_PATTERN.test(pem)) {
+    throw new Error('Client JWT public key must be a PEM-encoded SPKI public key.');
+  }
 
   try {
-    url = new URL(jwksUri);
+    return createPublicKey(pem);
   } catch {
-    throw new Error('Client JWT JWKS URI must be a valid URL.');
+    throw new Error('Client JWT public key must be a valid PEM-encoded SPKI public key.');
   }
-
-  const isLoopbackHttp = url.protocol === 'http:'
-    && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
-  if (url.protocol !== 'https:' && !isLoopbackHttp) {
-    throw new Error('Client JWT JWKS URI must use HTTPS, except for loopback development URLs.');
-  }
-
-  return url.toString();
 }
 
 function isValidPrincipalId(value: unknown): value is string {

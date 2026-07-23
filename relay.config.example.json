@@ -7,9 +7,9 @@
     }
   ],
   "clientJwt": {
-    "issuer": "http://127.0.0.1:4000/",
+    "issuer": "citadel-local",
     "audience": "citadel-relay",
-    "jwksUri": "http://127.0.0.1:4000/jwks.json",
-    "algorithms": ["RS256"]
+    "publicKeyPath": "./client-jwt-public.pem",
+    "algorithm": "RS256"
   }
 }

@@ -34,10 +34,10 @@ A client presents a JWT from Citadel's configured global issuer. It opens a name
     }
   ],
   "clientJwt": {
-    "issuer": "https://identity.example.com/",
+    "issuer": "citadel-local",
     "audience": "citadel-relay",
-    "jwksUri": "https://identity.example.com/.well-known/jwks.json",
-    "algorithms": ["RS256"]
+    "publicKeyPath": "./client-jwt-public.pem",
+    "algorithm": "RS256"
   }
 }
 ```
@@ -46,7 +46,13 @@ Generate a key with `openssl rand -hex 32`. Citadel validates unique names, keys
 
 Namespaces are exact first-level paths. `/chat` does not authorize `/chat-admin`, `/chat/private`, or `/files`.
 
-The top-level `clientJwt` block is required and applies to every namespace. Citadel obtains public verification keys from the configured remote JWKS, caches them, and allows the key set to rotate. The JWKS URI must use HTTPS except on loopback development hosts. Only explicitly configured asymmetric algorithms are accepted.
+The top-level `clientJwt` block is required and applies to every namespace.
+Citadel loads one PEM-encoded SPKI public key from disk at startup and verifies
+tokens using the one configured asymmetric algorithm. Relative public-key paths
+are resolved from the process working directory. The corresponding private key
+must remain with the trusted token issuer and must never be stored in Citadel or
+sent to clients. Replacing the key requires a relay restart and immediately
+invalidates tokens signed by the previous key.
 
 ## Owner Authentication And Claim
 

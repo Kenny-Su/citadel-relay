@@ -1,12 +1,18 @@
-import { createServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   SignJWT,
-  exportJWK,
+  exportPKCS8,
+  exportSPKI,
   generateKeyPair,
   type CryptoKey
 } from 'jose';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   PRE_SHARED_KEY_BYTES,
   createJwtClientAuthenticator,
@@ -22,18 +28,26 @@ function testKey(fill: number) {
   return Buffer.alloc(PRE_SHARED_KEY_BYTES, fill).toString('hex');
 }
 
-function listen(server: HttpServer) {
-  return new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve());
-  });
+const temporaryDirectories = new Set<string>();
+
+function temporaryPath(filename: string) {
+  const directory = mkdtempSync(join(tmpdir(), 'citadel-relay-'));
+  temporaryDirectories.add(directory);
+  return join(directory, filename);
 }
 
-function close(server: HttpServer) {
-  return new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-  });
+async function writePublicKey(publicKey: CryptoKey) {
+  const path = temporaryPath('client-jwt-public.pem');
+  writeFileSync(path, await exportSPKI(publicKey));
+  return path;
 }
+
+afterEach(() => {
+  for (const directory of temporaryDirectories) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  temporaryDirectories.clear();
+});
 
 async function signClientJwt(
   privateKey: CryptoKey,
@@ -87,16 +101,16 @@ describe('relay authentication', () => {
       clientJwt: {
         issuer: 'https://identity.example.com/',
         audience: 'citadel-relay',
-        jwksUri: 'https://identity.example.com/.well-known/jwks.json',
-        algorithms: ['RS256']
+        publicKeyPath: './keys/client-jwt-public.pem',
+        algorithm: 'RS256'
       }
     }))).toEqual({
       apps: [{ name: 'chat-server', preSharedKey: key, claimedPath: '/chat' }],
       clientJwt: {
         issuer: 'https://identity.example.com/',
         audience: 'citadel-relay',
-        jwksUri: 'https://identity.example.com/.well-known/jwks.json',
-        algorithms: ['RS256']
+        publicKeyPath: './keys/client-jwt-public.pem',
+        algorithm: 'RS256'
       }
     });
 
@@ -121,21 +135,15 @@ describe('relay authentication', () => {
     expect(() => validateClientJwtConfig({
       issuer: 'https://identity.example.com/',
       audience: 'citadel-relay',
-      jwksUri: 'http://identity.example.com/jwks.json',
-      algorithms: ['RS256']
-    })).toThrow('must use HTTPS');
+      publicKeyPath: '',
+      algorithm: 'RS256'
+    })).toThrow('public key path');
     expect(() => validateClientJwtConfig({
       issuer: 'https://identity.example.com/',
       audience: 'citadel-relay',
-      jwksUri: 'https://identity.example.com/jwks.json',
-      algorithms: ['HS256']
-    })).toThrow('asymmetric algorithms');
-    expect(() => validateClientJwtConfig({
-      issuer: 'https://identity.example.com/',
-      audience: 'citadel-relay',
-      jwksUri: 'https://identity.example.com/jwks.json',
-      algorithms: ['RS256', 'RS256']
-    })).toThrow('duplicates');
+      publicKeyPath: './keys/client-jwt-public.pem',
+      algorithm: 'HS256'
+    })).toThrow('asymmetric algorithm');
     expect(validateVerifiedClientIdentity({
       issuer: 'https://identity.example.com/',
       subject: 'client-42',
@@ -146,129 +154,99 @@ describe('relay authentication', () => {
     })).toThrow('Client identity subjects');
   });
 
-  it('verifies client JWT identity and selects keys from a remote JWKS', async () => {
-    const first = await generateKeyPair('RS256');
-    const second = await generateKeyPair('RS256');
-    const keys = await Promise.all([
-      exportJWK(first.publicKey),
-      exportJWK(second.publicKey)
-    ]);
-    const server = createServer((_request, response) => {
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({
-        keys: keys.map((key, index) => ({
-          ...key,
-          alg: 'RS256',
-          kid: `key-${index + 1}`,
-          use: 'sig'
-        }))
-      }));
+  it('verifies client JWT identity with a local public key', async () => {
+    const keyPair = await generateKeyPair('RS256');
+    const publicKeyPath = await writePublicKey(keyPair.publicKey);
+    const authenticate = createJwtClientAuthenticator({
+      issuer: 'https://identity.example.com/',
+      audience: 'citadel-relay',
+      publicKeyPath,
+      algorithm: 'RS256'
     });
-    await listen(server);
+    const token = await signClientJwt(keyPair.privateKey, {
+      subject: 'client-42',
+      expirationTime: Math.floor(Date.now() / 1_000) + 300,
+      claims: { role: 'member', groups: ['chat'] }
+    });
 
-    try {
-      const address = server.address() as AddressInfo;
-      const authenticate = createJwtClientAuthenticator({
-        issuer: 'https://identity.example.com/',
-        audience: 'citadel-relay',
-        jwksUri: `http://127.0.0.1:${address.port}/jwks.json`,
-        algorithms: ['RS256']
-      });
-      const token = await signClientJwt(second.privateKey, {
-        kid: 'key-2',
-        subject: 'client-42',
-        expirationTime: Math.floor(Date.now() / 1_000) + 300,
-        claims: { role: 'member', groups: ['chat'] }
-      });
-
-      expect(await authenticate(token)).toEqual({ subject: 'client-42' });
-    } finally {
-      await close(server);
-    }
+    expect(await authenticate(token)).toEqual({ subject: 'client-42' });
   });
 
   it('rejects invalid client JWT signatures and claims', async () => {
     const trusted = await generateKeyPair('RS256');
     const untrusted = await generateKeyPair('RS256');
-    const publicKey = await exportJWK(trusted.publicKey);
-    const server = createServer((_request, response) => {
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({
-        keys: [{ ...publicKey, alg: 'RS256', kid: 'key-1', use: 'sig' }]
-      }));
-    });
-    await listen(server);
-
-    try {
-      const address = server.address() as AddressInfo;
-      const config = {
-        issuer: 'https://identity.example.com/',
-        audience: 'citadel-relay',
-        jwksUri: `http://127.0.0.1:${address.port}/jwks.json`,
-        algorithms: ['RS256']
-      };
-      const authenticate = createJwtClientAuthenticator(config);
-      const now = Math.floor(Date.now() / 1_000);
-      const valid = {
-        subject: 'client-42',
-        expirationTime: now + 300
-      };
-
-      expect(await authenticate('x'.repeat(8_193))).toBeNull();
-      expect(await authenticate(await signClientJwt(untrusted.privateKey, valid))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        ...valid,
-        issuer: 'https://other.example.com/'
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        ...valid,
-        audience: 'another-service'
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        expirationTime: now + 300
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        subject: 'client-42'
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        subject: 'client-42',
-        expirationTime: now - 10
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        ...valid,
-        notBefore: now + 60
-      }))).toBeNull();
-      expect(await authenticate(await signClientJwt(trusted.privateKey, {
-        ...valid,
-        subject: 'x'.repeat(257)
-      }))).toBeNull();
-      expect(await createJwtClientAuthenticator({
-        ...config,
-        algorithms: ['PS256']
-      })(await signClientJwt(trusted.privateKey, valid))).toBeNull();
-    } finally {
-      await close(server);
-    }
-  });
-
-  it('fails closed when the remote JWKS is unavailable', async () => {
-    const keyPair = await generateKeyPair('RS256');
-    const server = createServer();
-    await listen(server);
-    const address = server.address() as AddressInfo;
-    await close(server);
-
-    const authenticate = createJwtClientAuthenticator({
+    const publicKeyPath = await writePublicKey(trusted.publicKey);
+    const config = {
       issuer: 'https://identity.example.com/',
       audience: 'citadel-relay',
-      jwksUri: `http://127.0.0.1:${address.port}/jwks.json`,
-      algorithms: ['RS256']
-    });
-    const token = await signClientJwt(keyPair.privateKey, {
+      publicKeyPath,
+      algorithm: 'RS256'
+    };
+    const authenticate = createJwtClientAuthenticator(config);
+    const now = Math.floor(Date.now() / 1_000);
+    const valid = {
       subject: 'client-42',
-      expirationTime: Math.floor(Date.now() / 1_000) + 300
-    });
+      expirationTime: now + 300
+    };
 
-    expect(await authenticate(token)).toBeNull();
+    expect(await authenticate('x'.repeat(8_193))).toBeNull();
+    expect(await authenticate(await signClientJwt(untrusted.privateKey, valid))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      issuer: 'https://other.example.com/'
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      audience: 'another-service'
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      expirationTime: now + 300
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      subject: 'client-42'
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      subject: 'client-42',
+      expirationTime: now - 10
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      notBefore: now + 60
+    }))).toBeNull();
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      subject: 'x'.repeat(257)
+    }))).toBeNull();
+    expect(await createJwtClientAuthenticator({
+      ...config,
+      algorithm: 'PS256'
+    })(await signClientJwt(trusted.privateKey, valid))).toBeNull();
+  });
+
+  it('rejects missing, malformed, and private key files at startup', async () => {
+    const keyPair = await generateKeyPair('RS256', { extractable: true });
+    const config = {
+      issuer: 'https://identity.example.com/',
+      audience: 'citadel-relay',
+      algorithm: 'RS256'
+    };
+    const missingPath = temporaryPath('missing.pem');
+    const malformedPath = temporaryPath('malformed.pem');
+    const privateKeyPath = temporaryPath('client-jwt-private.pem');
+    writeFileSync(malformedPath, 'not a public key');
+    writeFileSync(privateKeyPath, await exportPKCS8(keyPair.privateKey));
+
+    expect(() => createJwtClientAuthenticator({
+      ...config,
+      publicKeyPath: missingPath
+    })).toThrow('Could not read');
+    expect(() => createJwtClientAuthenticator({
+      ...config,
+      publicKeyPath: malformedPath
+    })).toThrow('SPKI public key');
+    expect(() => createJwtClientAuthenticator({
+      ...config,
+      publicKeyPath: privateKeyPath
+    })).toThrow('SPKI public key');
   });
 });
