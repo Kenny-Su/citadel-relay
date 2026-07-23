@@ -8,22 +8,30 @@ import {
   type ClientState,
   type PublicPrincipal,
   type ServerMessage,
+  type VerifiedClientIdentity,
   isNamespace
 } from './shared.js';
 import {
   AUTH_TOKEN_MAX_LENGTH,
   type RelayAuthenticator,
-  validateAuthenticatedPrincipal
+  type RelayClientAuthenticator,
+  validateAuthenticatedPrincipal,
+  validateVerifiedClientIdentity
 } from './auth.js';
 import { RELAY_VERSION } from './version.js';
 import { createTrafficLogger } from './trafficLog.js';
 
 const DEFAULT_ADMISSION_TIMEOUT_MS = 60_000;
+const DEFAULT_AUTHENTICATION_TIMEOUT_MS = 5_000;
+const WEBSOCKET_MAX_PAYLOAD_BYTES = 64 * 1_024;
 const OWNER_MESSAGE_MAX_LENGTH = 256;
 
 type ConnectionRecord = {
   connectionId: string;
   authenticating: boolean;
+  openingNamespace: boolean;
+  authenticationTimer?: ReturnType<typeof setTimeout>;
+  clientIdentity?: VerifiedClientIdentity;
   ownerPrincipal?: AuthenticatedPrincipal;
 };
 
@@ -33,6 +41,7 @@ type ClientSession = {
   requestId: string;
   state: ClientState;
   admissionTimer: ReturnType<typeof setTimeout>;
+  identity: VerifiedClientIdentity;
 };
 
 type HealthResponse = {
@@ -46,7 +55,9 @@ type HealthResponse = {
 
 export type RelayServerOptions = {
   authenticateOwner: RelayAuthenticator;
+  authenticateClient: RelayClientAuthenticator;
   admissionTimeoutMs?: number;
+  authenticationTimeoutMs?: number;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,15 +75,26 @@ export function createRelayServer(options: RelayServerOptions) {
   if (!options || typeof options.authenticateOwner !== 'function') {
     throw new Error('createRelayServer requires an authenticateOwner function.');
   }
+  if (typeof options.authenticateClient !== 'function') {
+    throw new Error('createRelayServer requires an authenticateClient function.');
+  }
 
   const admissionTimeoutMs = options.admissionTimeoutMs ?? DEFAULT_ADMISSION_TIMEOUT_MS;
   if (!Number.isFinite(admissionTimeoutMs) || admissionTimeoutMs <= 0) {
     throw new Error('admissionTimeoutMs must be a positive number.');
   }
+  const authenticationTimeoutMs = options.authenticationTimeoutMs
+    ?? DEFAULT_AUTHENTICATION_TIMEOUT_MS;
+  if (!Number.isFinite(authenticationTimeoutMs) || authenticationTimeoutMs <= 0) {
+    throw new Error('authenticationTimeoutMs must be a positive number.');
+  }
 
   const app = express();
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES
+  });
   const connections = new Map<WebSocket, ConnectionRecord>();
   const socketsByConnectionId = new Map<string, WebSocket>();
   const clientSessions = new Map<WebSocket, ClientSession>();
@@ -105,6 +127,26 @@ export function createRelayServer(options: RelayServerOptions) {
 
   function sendError(socket: WebSocket, message: string) {
     send(socket, { type: 'error:notice', message });
+  }
+
+  function clearAuthenticationTimer(socket: WebSocket) {
+    const connection = connections.get(socket);
+    if (!connection?.authenticationTimer) return;
+
+    clearTimeout(connection.authenticationTimer);
+    delete connection.authenticationTimer;
+  }
+
+  function closeUnauthenticated(socket: WebSocket, message: string) {
+    sendError(socket, message);
+    socket.close(4401, message);
+  }
+
+  function isAuthenticatedConnection(socket: WebSocket) {
+    const connection = connections.get(socket);
+    return connection?.ownerPrincipal !== undefined
+      || connection?.clientIdentity !== undefined
+      || clientSessions.has(socket);
   }
 
   function sendClientState(
@@ -149,7 +191,8 @@ export function createRelayServer(options: RelayServerOptions) {
         namespace: session.namespace,
         connectionId: connection.connectionId,
         admitted: session.state === 'admitted',
-        reason: options.reason
+        reason: options.reason,
+        identity: session.identity
       });
     }
   }
@@ -175,7 +218,12 @@ export function createRelayServer(options: RelayServerOptions) {
     const connection = connections.get(socket);
     if (!connection) return;
 
-    if (clientSessions.has(socket)) {
+    if (connection.clientIdentity || clientSessions.has(socket)) {
+      sendError(socket, 'A namespace client cannot authenticate as an owner.');
+      return;
+    }
+
+    if (connection.openingNamespace) {
       sendError(socket, 'A namespace client cannot authenticate as an owner.');
       return;
     }
@@ -221,6 +269,7 @@ export function createRelayServer(options: RelayServerOptions) {
 
     connection.authenticating = false;
     connection.ownerPrincipal = principal;
+    clearAuthenticationTimer(socket);
     send(socket, { type: 'auth:state', principal: publicPrincipal(principal) });
   }
 
@@ -257,7 +306,7 @@ export function createRelayServer(options: RelayServerOptions) {
     send(socket, { type: 'namespace:claimed', namespace });
   }
 
-  function handleNamespaceOpen(socket: WebSocket, message: ClientMessage) {
+  async function handleNamespaceOpen(socket: WebSocket, message: ClientMessage) {
     if (message.type !== 'namespace:open') return;
 
     const connection = connections.get(socket);
@@ -273,18 +322,64 @@ export function createRelayServer(options: RelayServerOptions) {
       return;
     }
 
-    if (clientSessions.has(socket)) {
+    if (clientSessions.has(socket) || connection.openingNamespace) {
       sendError(socket, 'This client already has an open namespace.');
       return;
     }
+
+    const credential = message.credential;
+    if (
+      !isRecord(credential)
+      || credential.type !== 'jwt'
+      || typeof credential.token !== 'string'
+      || credential.token.length === 0
+      || credential.token.length > AUTH_TOKEN_MAX_LENGTH
+    ) {
+      sendError(socket, 'Client authentication failed.');
+      socket.close(4401, 'Client authentication failed');
+      return;
+    }
+
+    connection.openingNamespace = true;
+    let identity: VerifiedClientIdentity | null = null;
+    try {
+      const authenticated = await options.authenticateClient(credential.token);
+      identity = authenticated === null
+        ? null
+        : validateVerifiedClientIdentity(authenticated);
+    } catch (error) {
+      if (traffic.enabled) {
+        traffic.log({
+          event: 'client-authentication-error',
+          connectionId: connection.connectionId,
+          error: error instanceof Error ? error.message : 'Unknown authentication error'
+        });
+      }
+    }
+
+    const authenticatedConnection = connections.get(socket);
+    if (!authenticatedConnection) return;
+    authenticatedConnection.openingNamespace = false;
+
+    if (!identity) {
+      sendError(socket, 'Client authentication failed.');
+      socket.close(4401, 'Client authentication failed');
+      return;
+    }
+
+    authenticatedConnection.clientIdentity = identity;
+    clearAuthenticationTimer(socket);
 
     if (!isNamespace(message.namespace)) {
       sendError(socket, 'Namespace must be a first-level lowercase path such as "/chat".');
       return;
     }
 
+    const currentConnection = connections.get(socket);
+    if (!currentConnection) return;
     const owner = namespaceOwners.get(message.namespace);
     if (!owner) {
+      currentConnection.openingNamespace = false;
       sendError(socket, 'Namespace is not available.');
       return;
     }
@@ -302,7 +397,8 @@ export function createRelayServer(options: RelayServerOptions) {
       owner,
       requestId,
       state: 'pending',
-      admissionTimer
+      admissionTimer,
+      identity
     };
 
     clientSessions.set(socket, session);
@@ -320,6 +416,7 @@ export function createRelayServer(options: RelayServerOptions) {
       requestId,
       namespace: message.namespace,
       connectionId: connection.connectionId,
+      identity,
       ...('hello' in message ? { hello: message.hello } : {})
     });
   }
@@ -414,7 +511,8 @@ export function createRelayServer(options: RelayServerOptions) {
       namespace: session.namespace,
       from: {
         connectionId: connection.connectionId,
-        state: session.state
+        state: session.state,
+        identity: session.identity
       },
       ...('payload' in message ? { payload: message.payload } : {})
     });
@@ -465,12 +563,20 @@ export function createRelayServer(options: RelayServerOptions) {
     try {
       parsed = JSON.parse(data.toString());
     } catch {
-      sendError(socket, 'Messages must be valid JSON.');
+      if (isAuthenticatedConnection(socket)) {
+        sendError(socket, 'Messages must be valid JSON.');
+      } else {
+        closeUnauthenticated(socket, 'Authentication is required.');
+      }
       return null;
     }
 
     if (!isRecord(parsed) || typeof parsed.type !== 'string') {
-      sendError(socket, 'Messages must be JSON objects with a string type.');
+      if (isAuthenticatedConnection(socket)) {
+        sendError(socket, 'Messages must be JSON objects with a string type.');
+      } else {
+        closeUnauthenticated(socket, 'Authentication is required.');
+      }
       return null;
     }
     return parsed as ClientMessage;
@@ -479,6 +585,10 @@ export function createRelayServer(options: RelayServerOptions) {
   function handleMessage(socket: WebSocket, data: RawData) {
     const message = parseMessage(socket, data);
     if (!message) return;
+
+    const connection = connections.get(socket);
+    if (!connection) return;
+    const authenticated = isAuthenticatedConnection(socket);
 
     if (traffic.enabled) {
       traffic.log({
@@ -494,9 +604,28 @@ export function createRelayServer(options: RelayServerOptions) {
           : undefined,
         bytes: Buffer.byteLength(data.toString()),
         bufferedBytes: socket.bufferedAmount
-      }, message.type === 'client:packet' || message.type === 'server:packet'
+      }, authenticated
+        && (message.type === 'client:packet' || message.type === 'server:packet')
         ? message.payload
         : undefined);
+    }
+
+    if (!authenticated) {
+      if (connection.authenticating || connection.openingNamespace) {
+        closeUnauthenticated(socket, 'Authentication is already in progress.');
+        return;
+      }
+      if (message.type === 'auth:authenticate') {
+        void handleOwnerAuthentication(socket, message);
+        return;
+      }
+      if (message.type === 'namespace:open') {
+        void handleNamespaceOpen(socket, message);
+        return;
+      }
+
+      closeUnauthenticated(socket, 'Authentication is required.');
+      return;
     }
 
     if (message.type === 'auth:authenticate') {
@@ -516,7 +645,7 @@ export function createRelayServer(options: RelayServerOptions) {
       return;
     }
     if (message.type === 'namespace:open') {
-      handleNamespaceOpen(socket, message);
+      void handleNamespaceOpen(socket, message);
       return;
     }
     if (message.type === 'namespace:close') {
@@ -578,11 +707,30 @@ export function createRelayServer(options: RelayServerOptions) {
 
   wss.on('connection', (socket) => {
     const connectionId = nanoid();
-    connections.set(socket, { connectionId, authenticating: false });
+    const connection: ConnectionRecord = {
+      connectionId,
+      authenticating: false,
+      openingNamespace: false
+    };
+    connections.set(socket, connection);
     socketsByConnectionId.set(connectionId, socket);
     if (traffic.enabled) traffic.log({ event: 'socket-open', connectionId });
 
+    connection.authenticationTimer = setTimeout(() => {
+      if (!connections.has(socket)) return;
+      closeUnauthenticated(socket, 'Authentication timed out.');
+    }, authenticationTimeoutMs);
+
     socket.on('message', (data) => handleMessage(socket, data));
+    socket.on('error', (error) => {
+      if (traffic.enabled) {
+        traffic.log({
+          event: 'socket-error',
+          connectionId,
+          error: error.message
+        });
+      }
+    });
 
     socket.on('close', () => {
       const connection = connections.get(socket);
@@ -596,6 +744,7 @@ export function createRelayServer(options: RelayServerOptions) {
       if (clientSession) {
         removeClientSession(socket, { notifyOwner: true, reason: 'client-disconnected' });
       }
+      clearAuthenticationTimer(socket);
       for (const namespace of [...(ownerNamespaces.get(socket) ?? [])]) {
         releaseNamespace(socket, namespace, false);
       }

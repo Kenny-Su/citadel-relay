@@ -9,6 +9,17 @@ export type AuthenticatedPrincipal = {
 
 export type PublicPrincipal = Pick<AuthenticatedPrincipal, 'id' | 'name'>;
 
+export type VerifiedClientIdentity = {
+  issuer: string;
+  subject: string;
+  claims: Record<string, unknown>;
+};
+
+export type JwtClientCredential = {
+  type: 'jwt';
+  token: string;
+};
+
 export type ConnectionTarget = {
   connectionId: string;
 };
@@ -33,6 +44,7 @@ export type ReleaseNamespaceMessage = {
 export type OpenNamespaceMessage<THello = unknown> = {
   type: 'namespace:open';
   namespace: string;
+  credential: JwtClientCredential;
   hello?: THello;
 };
 
@@ -106,6 +118,7 @@ export type NamespaceConnectMessage<THello = unknown> = {
   requestId: string;
   namespace: string;
   connectionId: string;
+  identity: VerifiedClientIdentity;
   hello?: THello;
 };
 
@@ -115,6 +128,7 @@ export type NamespaceDisconnectMessage = {
   connectionId: string;
   admitted: boolean;
   reason: 'client-closed' | 'client-disconnected' | 'admission-timeout';
+  identity: VerifiedClientIdentity;
 };
 
 export type RelayClientPacketMessage<TPayload = unknown> = {
@@ -123,6 +137,7 @@ export type RelayClientPacketMessage<TPayload = unknown> = {
   from: {
     connectionId: string;
     state: ClientState;
+    identity: VerifiedClientIdentity;
   };
   payload?: TPayload;
 };

@@ -1,9 +1,15 @@
 {
   "apps": [
     {
-      "name": "chat-server",
+      "name": "app",
       "preSharedKey": "REPLACE_WITH_OUTPUT_OF_OPENSSL_RAND_HEX_32",
-      "claimedPath": "/chat"
+      "claimedPath": "/app"
     }
-  ]
+  ],
+  "clientJwt": {
+    "issuer": "https://identity.example.com/",
+    "audience": "citadel-relay",
+    "jwksUri": "https://identity.example.com/.well-known/jwks.json",
+    "algorithms": ["RS256"]
+  }
 }

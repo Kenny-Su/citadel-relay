@@ -76,16 +76,20 @@ describe('relay server import boundaries', () => {
   it('exports relay contracts and runtime values', () => {
     expect(sortedExportKeys(relayContract)).toEqual([
       'AUTH_TOKEN_MAX_LENGTH',
+      'CLIENT_JWT_CLOCK_TOLERANCE_SECONDS',
       'NAMESPACE_MAX_LENGTH',
       'NAMESPACE_PATTERN',
       'PRE_SHARED_KEY_BYTES',
       'PRE_SHARED_KEY_ENCODED_LENGTH',
       'PRINCIPAL_ID_MAX_LENGTH',
+      'createJwtClientAuthenticator',
       'createPreSharedKeyAuthenticator',
       'isNamespace',
       'parsePreSharedKeyConfig',
       'validateAuthenticatedPrincipal',
-      'validatePreSharedKeyConfig'
+      'validateClientJwtConfig',
+      'validatePreSharedKeyConfig',
+      'validateVerifiedClientIdentity'
     ].sort());
     expect(sortedExportKeys(serverRuntime)).toEqual(['createRelayServer']);
   });

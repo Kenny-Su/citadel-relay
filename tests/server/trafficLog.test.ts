@@ -31,4 +31,35 @@ describe('traffic logger', () => {
     logger.log({ event: 'receive' }, { value: 7 });
     expect(JSON.parse(lines[0]).payload).toEqual({ value: 7 });
   });
+
+  it('keeps JWT credentials and verified identity out of routing diagnostics', () => {
+    const lines: string[] = [];
+    const logger = createTrafficLogger({
+      level: 'payload',
+      write: (line) => lines.push(line)
+    });
+
+    logger.log({
+      event: 'receive',
+      messageType: 'namespace:open',
+      bytes: 512
+    });
+    logger.log({
+      event: 'send',
+      messageType: 'namespace:connect',
+      toConnectionId: 'owner-1',
+      bytes: 256
+    });
+    logger.log({
+      event: 'send',
+      messageType: 'client:packet',
+      fromConnectionId: 'client-1',
+      bytes: 128
+    }, { body: 'hello' });
+
+    const output = lines.join('\n');
+    expect(output).not.toContain('signed-client-jwt');
+    expect(output).not.toContain('client-42');
+    expect(JSON.parse(lines[2]).payload).toEqual({ body: 'hello' });
+  });
 });

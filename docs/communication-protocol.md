@@ -1,13 +1,16 @@
 # Citadel Relay Communication Protocol
 
-Citadel routes opaque traffic between anonymous browser connections and authenticated app servers. It enforces exact first-level namespace ownership and packet direction. Each namespace owner implements browser authentication, ACLs, subrooms, presence, and application behavior.
+Citadel routes opaque traffic between authenticated clients and authenticated app servers. It enforces exact first-level namespace ownership, packet direction, and client JWT identity. Each namespace owner implements admission, ACLs, subrooms, presence, and application behavior.
 
 ## Transport
 
 - WebSocket endpoint: `ws://localhost:3001/ws`
 - Health endpoint: `GET /health`
+- Maximum WebSocket message size: 65,536 bytes
 
 Messages are JSON objects with a string `type`. Use `wss://` outside local development.
+
+Every connection has five seconds to establish its role. Before authentication, its first valid message must be either `auth:authenticate` for an owner or `namespace:open` with a client JWT. Malformed, unknown, or additional messages while authentication is running close the connection with code `4401`. Messages larger than the maximum close with code `1009`.
 
 ## Roles
 
@@ -17,7 +20,7 @@ An app owner authenticates with a configured 256-bit PSK and claims its configur
 
 ### Namespace client
 
-A browser is anonymous to Citadel. It opens a namespace and receives a relay-generated `connectionId`. While pending, it can exchange opaque handshake packets only with the owner. Once accepted, it can receive owner broadcasts.
+A client presents a JWT from Citadel's configured global issuer. It opens a namespace and receives a relay-generated `connectionId`. While pending, it can exchange opaque handshake packets only with the owner. Once accepted, it can receive owner broadcasts.
 
 ## App Owner Configuration
 
@@ -29,13 +32,21 @@ A browser is anonymous to Citadel. It opens a namespace and receives a relay-gen
       "preSharedKey": "64-character-lowercase-hexadecimal-key",
       "claimedPath": "/chat"
     }
-  ]
+  ],
+  "clientJwt": {
+    "issuer": "https://identity.example.com/",
+    "audience": "citadel-relay",
+    "jwksUri": "https://identity.example.com/.well-known/jwks.json",
+    "algorithms": ["RS256"]
+  }
 }
 ```
 
 Generate a key with `openssl rand -hex 32`. Citadel validates unique names, keys, and paths at startup, decodes each key to exactly 32 bytes, and performs fixed-length constant-time comparisons.
 
 Namespaces are exact first-level paths. `/chat` does not authorize `/chat-admin`, `/chat/private`, or `/files`.
+
+The top-level `clientJwt` block is required and applies to every namespace. Citadel obtains public verification keys from the configured remote JWKS, caches them, and allows the key set to rotate. The JWKS URI must use HTTPS except on loopback development hosts. Only explicitly configured asymmetric algorithms are accepted.
 
 ## Owner Authentication And Claim
 
@@ -71,21 +82,27 @@ Confirmation:
 
 An owner can send `namespace:release`. Disconnecting also releases every owned namespace and closes its clients.
 
-## Opening A Browser Connection
+## Opening A Client Connection
 
-Browser to relay:
+Client to relay:
 
 ```ts
 {
   type: 'namespace:open';
   namespace: '/chat';
+  credential: {
+    type: 'jwt';
+    token: string;
+  };
   hello?: unknown;
 }
 ```
 
-The `hello` value is opaque to Citadel. It may contain an app resume token, guest request, or handshake metadata.
+Citadel verifies the credential's signature, asymmetric algorithm, issuer, audience, subject, expiration, and optional not-before claim before checking whether the requested namespace is available or creating a pending session. A missing or unverifiable credential closes the connection with WebSocket code `4401`, and the namespace owner is not notified.
 
-The browser receives:
+The `hello` value is opaque and untrusted to Citadel. It may contain an app resume token or handshake metadata. Identity-like data inside `hello` is not verified client identity.
+
+The client receives:
 
 ```ts
 {
@@ -104,11 +121,18 @@ The owner receives:
   requestId: string;
   namespace: '/chat';
   connectionId: string;
+  identity: {
+    issuer: string;
+    subject: string;
+    claims: Record<string, unknown>;
+  };
   hello?: unknown;
 }
 ```
 
-Pending clients cannot receive broadcasts. They can exchange unicast handshake packets with the owner.
+`identity` contains the complete verified JWT claims set, but never the original bearer token. The identity is fixed for that namespace session. JWT expiration after the session opens does not automatically disconnect the client; the owner receives `exp` and controls session lifetime policy.
+
+Pending clients cannot receive broadcasts. They can exchange unicast handshake packets with the owner. Verified identity does not change the pending state.
 
 ## App-Owned Admission
 
@@ -128,7 +152,7 @@ Or rejects:
 }
 ```
 
-Citadel reports `state: 'admitted'` or `state: 'rejected'` to the browser. The owner can later revoke either a pending or admitted connection:
+Citadel reports `state: 'admitted'` or `state: 'rejected'` to the client. The owner can later revoke either a pending or admitted connection:
 
 ```ts
 {
@@ -138,11 +162,11 @@ Citadel reports `state: 'admitted'` or `state: 'rejected'` to the browser. The o
 }
 ```
 
-The browser can explicitly send `{ type: 'namespace:close' }`. On browser closure or disconnect, the owner receives `namespace:disconnect` with the trusted connection ID and prior admission state.
+The client can explicitly send `{ type: 'namespace:close' }`. On closure or disconnect, the owner receives `namespace:disconnect` with the trusted connection ID, prior admission state, and verified identity.
 
 ## Upstream Client Packets
 
-A pending or admitted browser sends:
+A pending or admitted client sends:
 
 ```ts
 {
@@ -151,7 +175,7 @@ A pending or admitted browser sends:
 }
 ```
 
-The browser cannot choose a target. Citadel sends only to the namespace owner and adds trusted routing metadata:
+The client cannot choose a target. Citadel sends only to the namespace owner and adds trusted routing and identity metadata:
 
 ```ts
 {
@@ -160,10 +184,17 @@ The browser cannot choose a target. Citadel sends only to the namespace owner an
   from: {
     connectionId: string;
     state: 'pending' | 'admitted';
+    identity: {
+      issuer: string;
+      subject: string;
+      claims: Record<string, unknown>;
+    };
   };
   payload?: unknown;
 }
 ```
+
+Identity-like data inside `payload` remains untrusted application data and cannot replace `from.identity`.
 
 ## Downstream Server Packets
 
@@ -199,10 +230,17 @@ Citadel does not inspect or validate `payload`.
 
 - Only a configured PSK principal can claim its exact namespace.
 - A namespace has at most one live owner.
+- Every namespace open requires a JWT that validates against the one configured issuer and audience.
+- Unauthenticated sockets have a five-second setup deadline and cannot probe namespace availability.
+- Pre-authentication garbage and concurrent authentication messages close the socket.
+- WebSocket messages are limited to 64 KiB.
+- Verified client identity is immutable for a namespace session and never grants admission by itself.
+- Citadel forwards verified claims only to that namespace owner and never forwards the original JWT.
+- Namespace owners, not Citadel, interpret roles, scopes, groups, or other authorization claims.
 - Client packets travel only to the owner.
 - Only owners can unicast or broadcast downstream.
 - Broadcasts exclude pending and rejected clients.
-- The relay, not payload data, supplies connection identity.
+- The relay, not `hello` or payload data, supplies trusted connection and client identity.
 - Losing an owner closes every connection under its namespace.
 - Relay state is in memory and disappears when the process exits.
 
@@ -213,3 +251,5 @@ Protocol and routing failures use:
 ```ts
 { type: 'error:notice'; message: string }
 ```
+
+Authentication failures use WebSocket close code `4401`; oversized messages use `1009`. IP-based rate limiting and connection quotas belong at the deployment edge rather than in the namespace-routing protocol.

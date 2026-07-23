@@ -12,6 +12,7 @@ export {
   type ClientState,
   type CloseNamespaceMessage,
   type ConnectionTarget,
+  type JwtClientCredential,
   type NamespaceClaimedMessage,
   type NamespaceClientStateMessage,
   type NamespaceConnectMessage,
@@ -26,18 +27,26 @@ export {
   type RevokeNamespaceClientMessage,
   type ServerMessage,
   type ServerPacketMessage,
-  type ServerPacketTarget
+  type ServerPacketTarget,
+  type VerifiedClientIdentity
 } from './shared.js';
 export {
   AUTH_TOKEN_MAX_LENGTH,
+  CLIENT_JWT_CLOCK_TOLERANCE_SECONDS,
   PRE_SHARED_KEY_BYTES,
   PRE_SHARED_KEY_ENCODED_LENGTH,
   PRINCIPAL_ID_MAX_LENGTH,
+  createJwtClientAuthenticator,
   createPreSharedKeyAuthenticator,
   parsePreSharedKeyConfig,
   validateAuthenticatedPrincipal,
+  validateClientJwtConfig,
   validatePreSharedKeyConfig,
+  validateVerifiedClientIdentity,
   type AppOwnerConfig,
+  type AppOwnerPreSharedKeyConfig,
+  type ClientJwtConfig,
   type PreSharedKeyConfig,
-  type RelayAuthenticator
+  type RelayAuthenticator,
+  type RelayClientAuthenticator
 } from './auth.js';

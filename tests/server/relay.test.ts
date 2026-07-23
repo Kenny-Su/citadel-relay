@@ -2,6 +2,7 @@ import { AddressInfo } from 'node:net';
 import type { Server as HttpServer } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
+import type { RelayClientAuthenticator } from '../../src/relay/auth.js';
 import { createRelayServer } from '../../src/relay/server.js';
 import type {
   AuthenticationStateMessage,
@@ -12,7 +13,8 @@ import type {
   RelayClientPacketMessage,
   RelayErrorMessage,
   RelayServerPacketMessage,
-  ServerMessage
+  ServerMessage,
+  VerifiedClientIdentity
 } from '../../src/relay/app.js';
 
 function waitForOpen(socket: WebSocket) {
@@ -74,9 +76,22 @@ type HealthResponse = {
 describe('citadel namespace relay', () => {
   let server: ReturnType<typeof createRelayServer>;
   let url: string;
+  let authenticateClient: RelayClientAuthenticator;
   const sockets: WebSocket[] = [];
+  const clientIdentity: VerifiedClientIdentity = {
+    issuer: 'https://identity.example.com/',
+    subject: 'client-42',
+    claims: {
+      iss: 'https://identity.example.com/',
+      aud: 'citadel-relay',
+      sub: 'client-42',
+      exp: 2_000_000_000,
+      role: 'member'
+    }
+  };
 
   beforeEach(async () => {
+    authenticateClient = (token) => token === 'valid-client-jwt' ? clientIdentity : null;
     server = createRelayServer({
       authenticateOwner(token) {
         if (token === 'chat-owner-key') {
@@ -86,6 +101,9 @@ describe('citadel namespace relay', () => {
           return { id: 'files-server', name: 'files-server', namespaceClaims: ['/files'] };
         }
         return null;
+      },
+      authenticateClient(token) {
+        return authenticateClient(token);
       },
       admissionTimeoutMs: 1_000
     });
@@ -128,11 +146,20 @@ describe('citadel namespace relay', () => {
     client: WebSocket,
     owner: WebSocket,
     namespace = '/chat',
-    hello: unknown = { resumeToken: null }
+    hello: unknown = { resumeToken: null },
+    credential: { type: 'jwt'; token: string } | null = {
+      type: 'jwt',
+      token: 'valid-client-jwt'
+    }
   ) {
     const pendingState = waitForMessage<NamespaceClientStateMessage>(client, 'namespace:state');
     const connect = waitForMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
-    sendJson(client, { type: 'namespace:open', namespace, hello });
+    sendJson(client, {
+      type: 'namespace:open',
+      namespace,
+      ...(credential !== null ? { credential } : {}),
+      hello
+    });
     const [state, request] = await Promise.all([pendingState, connect]);
     expect(state).toMatchObject({ type: 'namespace:state', namespace, state: 'pending' });
     expect(request).toMatchObject({
@@ -161,7 +188,7 @@ describe('citadel namespace relay', () => {
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.3.0',
+      version: '0.6.0',
       connections: 0,
       clients: 0,
       pendingClients: 0,
@@ -169,11 +196,28 @@ describe('citadel namespace relay', () => {
     });
   });
 
+  it('requires a client authenticator at server construction', () => {
+    expect(() => createRelayServer({
+      authenticateOwner: () => null
+    } as unknown as Parameters<typeof createRelayServer>[0])).toThrow(
+      'requires an authenticateClient function'
+    );
+    expect(() => createRelayServer({
+      authenticateOwner: () => null,
+      authenticateClient: () => null,
+      authenticationTimeoutMs: 0
+    })).toThrow('authenticationTimeoutMs must be a positive number');
+  });
+
   it('allows only an authorized app owner to claim an exclusive namespace', async () => {
     const browser = await connectSocket();
     const unauthenticated = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
+    const unauthenticatedClosed = new Promise<number>((resolve) => {
+      browser.once('close', (code) => resolve(code));
+    });
     sendJson(browser, { type: 'namespace:claim', namespace: '/chat' });
-    expect((await unauthenticated).message).toBe('Only an authenticated app owner can claim a namespace.');
+    expect((await unauthenticated).message).toBe('Authentication is required.');
+    expect(await unauthenticatedClosed).toBe(4401);
 
     const invalidOwner = await connectSocket();
     const invalid = waitForMessage<RelayErrorMessage>(invalidOwner, 'error:notice');
@@ -191,17 +235,23 @@ describe('citadel namespace relay', () => {
     expect((await duplicate).message).toBe('Namespace is already claimed.');
   });
 
-  it('opens an anonymous pending tunnel for an app-owned handshake', async () => {
+  it('opens an identified pending tunnel for an app-owned handshake', async () => {
     const owner = await claimOwner();
     const browser = await connectSocket();
-    const request = await openPending(browser, owner, '/chat', { mode: 'guest' });
+    const request = await openPending(browser, owner, '/chat', { mode: 'member' });
+    expect(request.identity).toEqual(clientIdentity);
 
     const credentials = waitForMessage<RelayClientPacketMessage<{ token: string }>>(owner, 'client:packet');
     sendJson(browser, { type: 'client:packet', payload: { token: 'app-owned-token' } });
-    expect(await credentials).toMatchObject({
+    const credentialsMessage = await credentials;
+    expect(credentialsMessage).toMatchObject({
       type: 'client:packet',
       namespace: '/chat',
-      from: { connectionId: request.connectionId, state: 'pending' },
+      from: {
+        connectionId: request.connectionId,
+        state: 'pending',
+        identity: clientIdentity
+      },
       payload: { token: 'app-owned-token' }
     });
 
@@ -221,7 +271,208 @@ describe('citadel namespace relay', () => {
     await acceptPending(browser, owner, request.requestId);
   });
 
-  it('lets the owner reject admission without relay-owned browser identity', async () => {
+  it('binds verified JWT identity to a pending client without performing admission', async () => {
+    const owner = await claimOwner();
+    const browser = await connectSocket();
+    const request = await openPending(
+      browser,
+      owner,
+      '/chat',
+      {
+        identity: {
+          issuer: 'https://forged.example.com/',
+          subject: 'attacker'
+        }
+      },
+      { type: 'jwt', token: 'valid-client-jwt' }
+    );
+
+    expect(request.identity).toEqual(clientIdentity);
+    const noAutomaticAdmission = await expectNoMessage<NamespaceClientStateMessage>(
+      browser,
+      'namespace:state'
+    );
+    expect(noAutomaticAdmission).toBeNull();
+
+    const packet = waitForMessage<RelayClientPacketMessage<{
+      identity: { subject: string };
+    }>>(owner, 'client:packet');
+    sendJson(browser, {
+      type: 'client:packet',
+      payload: { identity: { subject: 'attacker' } }
+    });
+    expect(await packet).toMatchObject({
+      namespace: '/chat',
+      from: {
+        connectionId: request.connectionId,
+        state: 'pending',
+        identity: clientIdentity
+      },
+      payload: { identity: { subject: 'attacker' } }
+    });
+
+    await acceptPending(browser, owner, request.requestId);
+    const downstream = waitForMessage<RelayServerPacketMessage<{ body: string }>>(
+      browser,
+      'server:packet'
+    );
+    sendJson(owner, {
+      type: 'server:packet',
+      namespace: '/chat',
+      target: { connectionId: request.connectionId },
+      payload: { body: 'welcome' }
+    });
+    expect(await downstream).toEqual({
+      type: 'server:packet',
+      namespace: '/chat',
+      payload: { body: 'welcome' }
+    });
+
+    const disconnected = waitForMessage<NamespaceDisconnectMessage>(owner, 'namespace:disconnect');
+    sendJson(browser, { type: 'namespace:close' });
+    expect(await disconnected).toMatchObject({
+      connectionId: request.connectionId,
+      admitted: true,
+      identity: clientIdentity
+    });
+  });
+
+  it('rejects an invalid supplied client credential before notifying the owner', async () => {
+    const owner = await claimOwner();
+    const browser = await connectSocket();
+    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
+    const closed = new Promise<number>((resolve) => {
+      browser.once('close', (code) => resolve(code));
+    });
+
+    sendJson(browser, {
+      type: 'namespace:open',
+      namespace: '/chat',
+      credential: { type: 'jwt', token: 'invalid-client-jwt' }
+    });
+
+    expect((await failed).message).toBe('Client authentication failed.');
+    expect(await closed).toBe(4401);
+    expect(await ownerConnect).toBeNull();
+    const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
+    expect(health.clients).toBe(0);
+  });
+
+  it('rejects a client without a JWT before notifying the owner', async () => {
+    const owner = await claimOwner();
+    const browser = await connectSocket();
+    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+    const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
+    const closed = new Promise<number>((resolve) => {
+      browser.once('close', (code) => resolve(code));
+    });
+
+    sendJson(browser, {
+      type: 'namespace:open',
+      namespace: '/chat'
+    });
+
+    expect((await failed).message).toBe('Client authentication failed.');
+    expect(await closed).toBe(4401);
+    expect(await ownerConnect).toBeNull();
+  });
+
+  it('verifies identity before revealing namespace availability', async () => {
+    const browser = await connectSocket();
+    const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
+    const closed = new Promise<number>((resolve) => {
+      browser.once('close', (code) => resolve(code));
+    });
+
+    sendJson(browser, {
+      type: 'namespace:open',
+      namespace: '/missing',
+      credential: { type: 'jwt', token: 'invalid-client-jwt' }
+    });
+
+    expect((await failed).message).toBe('Client authentication failed.');
+    expect(await closed).toBe(4401);
+  });
+
+  it('closes malformed traffic from an unauthenticated connection', async () => {
+    const socket = await connectSocket();
+    const failed = waitForMessage<RelayErrorMessage>(socket, 'error:notice');
+    const closed = new Promise<number>((resolve) => {
+      socket.once('close', (code) => resolve(code));
+    });
+
+    socket.send('not-json');
+
+    expect((await failed).message).toBe('Authentication is required.');
+    expect(await closed).toBe(4401);
+  });
+
+  it('closes a connection that does not authenticate before the setup deadline', async () => {
+    const timeoutServer = createRelayServer({
+      authenticateOwner: () => null,
+      authenticateClient: () => null,
+      authenticationTimeoutMs: 20
+    });
+    await listen(timeoutServer.httpServer);
+    const address = timeoutServer.httpServer.address() as AddressInfo;
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
+
+    try {
+      await waitForOpen(socket);
+      const failed = waitForMessage<RelayErrorMessage>(socket, 'error:notice');
+      const closed = new Promise<number>((resolve) => {
+        socket.once('close', (code) => resolve(code));
+      });
+
+      expect((await failed).message).toBe('Authentication timed out.');
+      expect(await closed).toBe(4401);
+    } finally {
+      socket.close();
+      await new Promise<void>((resolve) => timeoutServer.wss.close(() => resolve()));
+      await new Promise<void>((resolve) => timeoutServer.httpServer.close(() => resolve()));
+    }
+  });
+
+  it('closes oversized WebSocket messages before parsing them', async () => {
+    const socket = await connectSocket();
+    const closed = new Promise<number>((resolve) => {
+      socket.once('close', (code) => resolve(code));
+    });
+
+    socket.send(Buffer.alloc(65_537, 0x61));
+
+    expect(await closed).toBe(1009);
+  });
+
+  it('closes a connection that sends more traffic while authentication is pending', async () => {
+    let completeAuthentication: ((identity: VerifiedClientIdentity) => void) | undefined;
+    authenticateClient = () => new Promise((resolve) => {
+      completeAuthentication = resolve;
+    });
+    const owner = await claimOwner();
+    const browser = await connectSocket();
+    const ownerConnect = expectNoMessage<NamespaceConnectMessage>(owner, 'namespace:connect');
+
+    sendJson(browser, {
+      type: 'namespace:open',
+      namespace: '/chat',
+      credential: { type: 'jwt', token: 'delayed-client-jwt' }
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const duplicate = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
+    const closed = new Promise<number>((resolve) => {
+      browser.once('close', (code) => resolve(code));
+    });
+    sendJson(browser, { type: 'namespace:open', namespace: '/chat' });
+    expect((await duplicate).message).toBe('Authentication is already in progress.');
+    expect(await closed).toBe(4401);
+
+    completeAuthentication?.(clientIdentity);
+    expect(await ownerConnect).toBeNull();
+  });
+
+  it('lets the owner reject admission after relay-verified client identity', async () => {
     const owner = await claimOwner();
     const browser = await connectSocket();
     const request = await openPending(browser, owner);
@@ -398,7 +649,7 @@ describe('citadel namespace relay', () => {
     const health = await fetch(`${url}/health`).then((response) => response.json()) as HealthResponse;
     expect(health).toEqual({
       ok: true,
-      version: '0.3.0',
+      version: '0.6.0',
       connections: 2,
       clients: 1,
       pendingClients: 0,
@@ -407,17 +658,22 @@ describe('citadel namespace relay', () => {
   });
 
   it('reports malformed and unknown protocol input', async () => {
-    const socket = await connectSocket();
-    const malformed = waitForMessage<RelayErrorMessage>(socket, 'error:notice');
-    socket.send('not-json');
+    const owner = await claimOwner();
+    const malformed = waitForMessage<RelayErrorMessage>(owner, 'error:notice');
+    owner.send('not-json');
     expect((await malformed).message).toBe('Messages must be valid JSON.');
 
-    const unknown = waitForMessage<RelayErrorMessage>(socket, 'error:notice');
-    sendJson(socket, { type: 'made:up' });
+    const unknown = waitForMessage<RelayErrorMessage>(owner, 'error:notice');
+    sendJson(owner, { type: 'made:up' });
     expect((await unknown).message).toBe('Unknown message type.');
 
-    const deepNamespace = waitForMessage<RelayErrorMessage>(socket, 'error:notice');
-    sendJson(socket, { type: 'namespace:open', namespace: '/chat/private' });
+    const client = await connectSocket();
+    const deepNamespace = waitForMessage<RelayErrorMessage>(client, 'error:notice');
+    sendJson(client, {
+      type: 'namespace:open',
+      namespace: '/chat/private',
+      credential: { type: 'jwt', token: 'valid-client-jwt' }
+    });
     expect((await deepNamespace).message).toBe('Namespace must be a first-level lowercase path such as "/chat".');
   });
 });
