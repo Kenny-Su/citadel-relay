@@ -29,7 +29,7 @@ that server can accept clients or send downstream packets for the app.
 
 ### App client
 
-A client presents a JWT from Citadel's configured global issuer. It opens an app
+A client presents a JWT signed by Citadel's configured identity service. It opens an app
 and receives a relay-generated `connectionId`. While pending, it can exchange
 opaque handshake packets only with the app server. Once accepted, it can receive
 server broadcasts.
@@ -105,7 +105,11 @@ Client to relay:
 }
 ```
 
-Citadel verifies the credential's signature, asymmetric algorithm, issuer, audience, subject, expiration, and optional not-before claim before checking whether the requested app is available or creating a pending session. A missing or unverifiable credential closes the connection with WebSocket code `4401`, and the app server is not notified.
+Citadel verifies the credential's signature, asymmetric algorithm, subject,
+expiration, and optional not-before claim before checking whether the requested
+app is available or creating a pending session. Issuer and audience are not
+currently enforced. A missing or unverifiable credential closes the connection
+with WebSocket code `4401`, and the app server is not notified.
 
 The `hello` value is opaque and untrusted to Citadel. It may contain an app resume token or handshake metadata. Identity-like data inside `hello` is not verified client identity.
 
@@ -237,7 +241,7 @@ cannot select or restate an app. Citadel does not inspect or validate `payload`.
 
 - Only the server with an app's configured PSK can register that app.
 - An app has at most one live app server.
-- Every app open requires a JWT that validates against the one configured issuer and audience.
+- Every app open requires a JWT that validates against the configured public key and algorithm.
 - Unauthenticated sockets have a five-second setup deadline and cannot probe app availability.
 - Pre-authentication garbage and concurrent authentication messages close the socket.
 - WebSocket messages are limited to 64 KiB.

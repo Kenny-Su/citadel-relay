@@ -190,6 +190,30 @@ describe('relay authentication', () => {
     expect(await authenticate(token)).toEqual({ subject: 'client-42' });
   });
 
+  it('verifies client JWTs without enforcing issuer or audience', async () => {
+    const trusted = await generateKeyPair('RS256');
+    const publicKeyPath = await writePublicKey(trusted.publicKey);
+    const authenticate = createJwtClientAuthenticator({
+      issuer: 'https://identity.example.com/',
+      audience: 'citadel-relay',
+      publicKeyPath,
+      algorithm: 'RS256'
+    });
+    const valid = {
+      subject: 'client-42',
+      expirationTime: Math.floor(Date.now() / 1_000) + 300
+    };
+
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      issuer: 'https://other.example.com/'
+    }))).toEqual({ subject: 'client-42' });
+    expect(await authenticate(await signClientJwt(trusted.privateKey, {
+      ...valid,
+      audience: 'another-service'
+    }))).toEqual({ subject: 'client-42' });
+  });
+
   it('rejects invalid client JWT signatures and claims', async () => {
     const trusted = await generateKeyPair('RS256');
     const untrusted = await generateKeyPair('RS256');
@@ -209,14 +233,6 @@ describe('relay authentication', () => {
 
     expect(await authenticate('x'.repeat(8_193))).toBeNull();
     expect(await authenticate(await signClientJwt(untrusted.privateKey, valid))).toBeNull();
-    expect(await authenticate(await signClientJwt(trusted.privateKey, {
-      ...valid,
-      issuer: 'https://other.example.com/'
-    }))).toBeNull();
-    expect(await authenticate(await signClientJwt(trusted.privateKey, {
-      ...valid,
-      audience: 'another-service'
-    }))).toBeNull();
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       expirationTime: now + 300
     }))).toBeNull();

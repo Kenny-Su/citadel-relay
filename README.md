@@ -2,7 +2,7 @@
 
 Citadel is an authenticated app router. App servers authenticate with pre-shared
 keys that map them to identifiers such as `chat`. Every client
-authenticates with a JWT from one configured global issuer. Citadel verifies
+authenticates with a JWT signed by the configured identity service. Citadel verifies
 client identity, while each app server makes every admission and ACL decision.
 
 All WebSocket traffic passes through Citadel. Clients can send packets only upstream
@@ -61,9 +61,10 @@ public key once at startup and accepts only the configured asymmetric
 algorithm. A relative `publicKeyPath` is resolved from the process working
 directory.
 
-The identity server issues client JWTs. Their issuer and audience must exactly
-match `relay.config.json`. Citadel only verifies those tokens and never loads a
-private key or exposes token-generation functionality.
+The identity server issues client JWTs. The issuer and audience settings remain
+in `relay.config.json` for compatibility but are not currently enforced.
+Citadel only verifies those tokens and never loads a private key or exposes
+token-generation functionality.
 
 The API and WebSocket server run at `http://localhost:3001`; Vite serves the
 admin frontend at `http://localhost:5173/admin/` during development. After
@@ -163,8 +164,9 @@ cp deploy/relay.config.example.json deploy/relay.config.json
 cp /path/from/identity-server/client-jwt-public.pem deploy/client-jwt-public.pem
 ```
 
-Edit `deploy/relay.config.json` so its issuer, audience, and algorithm match the
-identity server. Keep its `publicKeyPath` set to
+Edit `deploy/relay.config.json` so its algorithm matches the identity server.
+The issuer and audience settings are retained but are not currently enforced.
+Keep its `publicKeyPath` set to
 `/run/secrets/client-jwt-public.pem`.
 
 Create an ignored `.env` file from the documented template, then replace the

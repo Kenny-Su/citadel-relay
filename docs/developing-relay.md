@@ -12,7 +12,7 @@ registrations, while its React client is built and served at `/admin/`. Process
 startup lives in `src/server/index.ts`.
 
 After any first-start migration, the untracked `relay.config.json` contains only
-the required global client JWT issuer, audience, local public-key path, and fixed
+the compatibility-only client JWT issuer and audience, local public-key path, and fixed
 verification algorithm. Legacy app entries are imported into SQLite once and
 removed from the file.
 

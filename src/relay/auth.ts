@@ -43,7 +43,9 @@ export type AppServerConfig = {
 };
 
 export type ClientJwtConfig = {
+  /** Retained for configuration compatibility; not currently enforced. */
   issuer: string;
+  /** Retained for configuration compatibility; not currently enforced. */
   audience: string;
   publicKeyPath: string;
   algorithm: string;
@@ -105,16 +107,13 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
 
     try {
       const { payload } = await jwtVerify(token, publicKey, {
-        issuer: validated.issuer,
-        audience: validated.audience,
         algorithms: [validated.algorithm],
         clockTolerance: CLIENT_JWT_CLOCK_TOLERANCE_SECONDS,
         requiredClaims: ['sub', 'exp']
       });
 
       if (
-        typeof payload.iss !== 'string'
-        || !isValidClientSubject(payload.sub)
+        !isValidClientSubject(payload.sub)
         || typeof payload.exp !== 'number'
       ) {
         return null;
