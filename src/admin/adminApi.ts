@@ -76,7 +76,6 @@ export function mountAdminApi(app: Express, options: AdminApiOptions): void {
     const attempt = loginAttempts.get(remoteAddress);
     if (
       attempt
-      && currentTime - attempt.windowStartedAt < LOGIN_WINDOW_MILLISECONDS
       && attempt.failures >= LOGIN_MAX_FAILURES
     ) {
       response.setHeader(
@@ -219,8 +218,7 @@ export function mountAdminApi(app: Express, options: AdminApiOptions): void {
       ? sessions.get(digestText(sessionToken))
       : undefined;
 
-    if (!session || session.expiresAt <= currentTime) {
-      if (sessionToken) sessions.delete(digestText(sessionToken));
+    if (!session) {
       response.setHeader('Set-Cookie', clearSessionCookie(secureCookies));
       sendError(response, 401, 'AUTHENTICATION_REQUIRED', 'Admin authentication is required.');
       return;
@@ -306,7 +304,7 @@ function recordLoginFailure(
   currentTime: number
 ): void {
   const current = attempts.get(remoteAddress);
-  if (!current || currentTime - current.windowStartedAt >= LOGIN_WINDOW_MILLISECONDS) {
+  if (!current) {
     while (attempts.size >= LOGIN_TRACKED_ADDRESS_LIMIT) {
       const oldestAddress = attempts.keys().next().value as string | undefined;
       if (!oldestAddress) break;

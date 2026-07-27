@@ -323,7 +323,7 @@ export default function App() {
           <Metric
             label="Online"
             value={connectedApps}
-            detail={`${Math.max(apps.length - connectedApps, 0)} offline`}
+            detail={`${apps.length - connectedApps} offline`}
             accent="online"
           />
           <Metric
@@ -473,7 +473,7 @@ function LoginScreen(props: {
           </h1>
           <p>
             Register trusted app servers, rotate their credentials, and see
-            live routing activity from one secure place.
+            current routing status from one secure place.
           </p>
           <div className="verification-note">
             <div className="verification-symbol" aria-hidden="true">✓</div>
@@ -700,9 +700,6 @@ function CreateAppDialog(props: {
 
   function validate() {
     if (!appId) return 'Enter an app ID.';
-    if (appId.length > APP_ID_MAX_LENGTH) {
-      return `App IDs must be ${APP_ID_MAX_LENGTH} characters or fewer.`;
-    }
     if (!APP_ID_PATTERN.test(appId)) {
       return 'Use lowercase letters, numbers, and internal hyphens only.';
     }

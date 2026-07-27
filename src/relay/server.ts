@@ -4,9 +4,13 @@ import { nanoid } from 'nanoid';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import {
   type AppClientState,
+  type AppServerAuthenticateMessage,
   type AuthenticatedAppServer,
+  type ClientPacketMessage,
+  type OpenAppMessage,
   type RelayInboundMessage,
   type RelayOutboundMessage,
+  type ServerPacketMessage,
   type VerifiedClientIdentity,
   isAppId
 } from './shared.js';
@@ -145,8 +149,7 @@ export function createRelayServer(options: RelayServerOptions) {
   function isAuthenticatedConnection(socket: WebSocket) {
     const connection = connections.get(socket);
     return connection?.appServer !== undefined
-      || connection?.clientIdentity !== undefined
-      || clientSessions.has(socket);
+      || connection?.clientIdentity !== undefined;
   }
 
   function sendClientState(
@@ -235,12 +238,12 @@ export function createRelayServer(options: RelayServerOptions) {
 
   async function handleAppServerAuthentication(
     socket: WebSocket,
-    message: RelayInboundMessage
+    message: AppServerAuthenticateMessage
   ) {
     const connection = connections.get(socket);
     if (!connection) return;
 
-    if (connection.clientIdentity || clientSessions.has(socket)) {
+    if (connection.clientIdentity) {
       sendError(socket, 'An app client cannot authenticate as an app server.');
       return;
     }
@@ -256,8 +259,7 @@ export function createRelayServer(options: RelayServerOptions) {
     }
 
     if (
-      message.type !== 'app:authenticate'
-      || typeof message.token !== 'string'
+      typeof message.token !== 'string'
       || message.token.length === 0
       || message.token.length > AUTH_TOKEN_MAX_LENGTH
     ) {
@@ -305,9 +307,7 @@ export function createRelayServer(options: RelayServerOptions) {
     send(socket, { type: 'app:ready', appId: authenticatedAppServer.appId });
   }
 
-  async function handleAppOpen(socket: WebSocket, message: RelayInboundMessage) {
-    if (message.type !== 'app:open') return;
-
+  async function handleAppOpen(socket: WebSocket, message: OpenAppMessage) {
     const connection = connections.get(socket);
     if (!connection) return;
 
@@ -374,11 +374,8 @@ export function createRelayServer(options: RelayServerOptions) {
       return;
     }
 
-    const currentConnection = connections.get(socket);
-    if (!currentConnection) return;
     const appServer = appServers.get(message.appId);
     if (!appServer) {
-      currentConnection.openingApp = false;
       sendError(socket, 'App is not available.');
       return;
     }
@@ -489,8 +486,7 @@ export function createRelayServer(options: RelayServerOptions) {
     removeClientSession(client, { notifyAppServer: false, reason: 'client-closed' });
   }
 
-  function handleClientPacket(socket: WebSocket, message: RelayInboundMessage) {
-    if (message.type !== 'client:packet') return;
+  function handleClientPacket(socket: WebSocket, message: ClientPacketMessage) {
     if ('target' in message) {
       sendError(socket, 'Client packets cannot specify a target.');
       return;
@@ -513,8 +509,7 @@ export function createRelayServer(options: RelayServerOptions) {
     });
   }
 
-  function handleServerPacket(appServer: WebSocket, message: RelayInboundMessage) {
-    if (message.type !== 'server:packet') return;
+  function handleServerPacket(appServer: WebSocket, message: ServerPacketMessage) {
     const connection = connections.get(appServer);
     if (!connection?.appServer) {
       sendError(appServer, 'Only an authenticated app server can send server packets.');

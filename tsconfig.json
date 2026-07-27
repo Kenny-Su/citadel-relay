@@ -4,15 +4,12 @@
     "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node"],
     "ignoreDeprecations": "6.0",
-    "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true
   }

@@ -194,30 +194,21 @@ describe('RegistrationStore', () => {
     expect(store.migrateLegacyApps([
       { appId: 'chat', preSharedKey: chatKey },
       { appId: 'files', preSharedKey: filesKey }
-    ])).toEqual({
-      migrated: true,
-      importedCount: 2
-    });
+    ])).toBe(2);
     expect(store.hasCompletedLegacyMigration()).toBe(true);
     expect(store.authenticate(chatKey)).toEqual({ appId: 'chat' });
     expect(store.authenticate(filesKey)).toEqual({ appId: 'files' });
 
     expect(store.migrateLegacyApps([
       { appId: 'chat', preSharedKey: legacyKey(3) }
-    ])).toEqual({
-      migrated: false,
-      importedCount: 0
-    });
+    ])).toBe(0);
     expect(store.authenticate(chatKey)).toEqual({ appId: 'chat' });
     expect(store.authenticate(legacyKey(3))).toBeNull();
     store.close();
 
     const reopened = new RegistrationStore({ databasePath });
     expect(reopened.hasCompletedLegacyMigration()).toBe(true);
-    expect(reopened.migrateLegacyApps([])).toEqual({
-      migrated: false,
-      importedCount: 0
-    });
+    expect(reopened.migrateLegacyApps([])).toBe(0);
     expect(reopened.authenticate(chatKey)).toEqual({ appId: 'chat' });
     reopened.close();
   });
@@ -225,10 +216,7 @@ describe('RegistrationStore', () => {
   it('can mark an empty legacy migration as complete', () => {
     const store = new RegistrationStore({ databasePath: temporaryDatabasePath() });
 
-    expect(store.migrateLegacyApps([])).toEqual({
-      migrated: true,
-      importedCount: 0
-    });
+    expect(store.migrateLegacyApps([])).toBe(0);
     expect(store.hasCompletedLegacyMigration()).toBe(true);
     expect(store.list()).toEqual([]);
 

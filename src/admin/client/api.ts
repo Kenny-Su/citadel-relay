@@ -49,9 +49,6 @@ async function request<T>(
   });
 
   if (response.status === 204) {
-    if (!response.ok) {
-      throw new AdminApiError('The relay rejected this request.', response.status);
-    }
     return undefined as T;
   }
 

@@ -11,9 +11,10 @@ The admin control plane lives under `src/admin`. Its SQLite store owns app
 registrations, while its React client is built and served at `/admin/`. Process
 startup lives in `src/server/index.ts`.
 
-The untracked `relay.config.json` contains only the required global client JWT
-issuer, audience, local public-key path, and fixed verification algorithm.
-Legacy app entries are imported into SQLite once and removed from the file.
+After any first-start migration, the untracked `relay.config.json` contains only
+the required global client JWT issuer, audience, local public-key path, and fixed
+verification algorithm. Legacy app entries are imported into SQLite once and
+removed from the file.
 
 Verify changes with:
 

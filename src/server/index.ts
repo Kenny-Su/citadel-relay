@@ -22,7 +22,7 @@ if (ADMIN_PASSPHRASE && ADMIN_PASSPHRASE.length < 16) {
 const { clientJwt: clientJwtConfig } = parseRelayConfig(readFileSync(CONFIG_PATH, 'utf8'));
 const authenticateClient = createJwtClientAuthenticator(clientJwtConfig);
 const registrationStore = new RegistrationStore();
-const { migratedLegacyApps } = prepareRelayConfig(CONFIG_PATH, registrationStore);
+const migratedLegacyApps = prepareRelayConfig(CONFIG_PATH, registrationStore);
 const authenticateAppServer = (token: string) => registrationStore.authenticate(token);
 const relay = createRelayServer({
   authenticateAppServer,

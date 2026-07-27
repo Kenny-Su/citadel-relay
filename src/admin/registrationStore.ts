@@ -33,11 +33,6 @@ export type LegacyAppRegistration = {
   preSharedKey: string;
 };
 
-export type LegacyMigrationResult = {
-  migrated: boolean;
-  importedCount: number;
-};
-
 export type RegistrationStoreOptions = {
   databasePath?: string;
 };
@@ -65,7 +60,7 @@ type RegistrationRow = {
   rotated_at: string | null;
 };
 
-type CredentialRow = RegistrationRow & {
+type CredentialRow = {
   psk_digest: Uint8Array;
 };
 
@@ -77,34 +72,29 @@ type CredentialRow = RegistrationRow & {
  * the caller once, on creation or rotation.
  */
 export class RegistrationStore {
-  readonly databasePath: string;
-
   private readonly database: DatabaseSync;
 
   constructor(options: RegistrationStoreOptions = {}) {
-    this.databasePath = options.databasePath
+    const databasePath = options.databasePath
       ?? process.env.RELAY_DATABASE_PATH
       ?? DEFAULT_DATABASE_PATH;
 
-    if (this.databasePath.length === 0) {
+    if (databasePath.length === 0) {
       throw new Error('Registration database path must not be empty.');
     }
 
-    if (this.databasePath !== ':memory:') {
-      const descriptor = openSync(this.databasePath, 'a', DATABASE_FILE_MODE);
+    if (databasePath !== ':memory:') {
+      const descriptor = openSync(databasePath, 'a', DATABASE_FILE_MODE);
       closeSync(descriptor);
-      chmodSync(this.databasePath, DATABASE_FILE_MODE);
+      chmodSync(databasePath, DATABASE_FILE_MODE);
     }
 
-    this.database = new DatabaseSync(this.databasePath, {
+    this.database = new DatabaseSync(databasePath, {
       timeout: DATABASE_BUSY_TIMEOUT_MILLISECONDS
     });
 
     try {
       this.initializeSchema();
-      if (this.databasePath !== ':memory:') {
-        chmodSync(this.databasePath, DATABASE_FILE_MODE);
-      }
     } catch (error) {
       this.database.close();
       throw error;
@@ -213,19 +203,16 @@ export class RegistrationStore {
     `).get(LEGACY_MIGRATION_KEY) !== undefined;
   }
 
-  migrateLegacyApps(apps: readonly LegacyAppRegistration[]): LegacyMigrationResult {
-    const validatedApps = validateLegacyApps(apps);
+  migrateLegacyApps(apps: readonly LegacyAppRegistration[]): number {
+    validateLegacyApps(apps);
 
     return this.inTransaction(() => {
       if (this.hasCompletedLegacyMigration()) {
-        return {
-          migrated: false,
-          importedCount: 0
-        };
+        return 0;
       }
 
       let importedCount = 0;
-      for (const app of validatedApps) {
+      for (const app of apps) {
         const existing = this.findCredentialRow(app.appId);
         const digest = digestPreSharedKey(app.preSharedKey);
 
@@ -267,13 +254,10 @@ export class RegistrationStore {
         VALUES (?, ?)
       `).run(LEGACY_MIGRATION_KEY, JSON.stringify({
         completedAt: new Date().toISOString(),
-        appCount: validatedApps.length
+        appCount: apps.length
       }));
 
-      return {
-        migrated: true,
-        importedCount
-      };
+      return importedCount;
     });
   }
 
@@ -307,7 +291,7 @@ export class RegistrationStore {
 
   private findCredentialRow(appId: string): CredentialRow | undefined {
     return this.database.prepare(`
-      SELECT app_id, psk_digest, created_at, rotated_at
+      SELECT psk_digest
       FROM app_registrations
       WHERE app_id = ?
     `).get(appId) as CredentialRow | undefined;
@@ -359,7 +343,7 @@ function generatePreSharedKey(): string {
 
 function validateLegacyApps(
   apps: readonly LegacyAppRegistration[]
-): readonly LegacyAppRegistration[] {
+): void {
   const appIds = new Set<string>();
   const preSharedKeys = new Set<string>();
 
@@ -388,5 +372,4 @@ function validateLegacyApps(
     preSharedKeys.add(app.preSharedKey);
   }
 
-  return apps;
 }

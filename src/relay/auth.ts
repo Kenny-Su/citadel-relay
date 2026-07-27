@@ -65,6 +65,9 @@ type PreSharedKeyEntry = {
 export function createAppServerAuthenticator(
   config: AppServerKeyConfig
 ): RelayAppServerAuthenticator {
+  if (!isRecord(config)) {
+    throw new Error('Relay config must be an object.');
+  }
   const apps = validateAppServerConfig(config);
   const entries: PreSharedKeyEntry[] = apps.map((configured) => ({
     key: decodePreSharedKey(configured.preSharedKey) as Buffer,
@@ -139,21 +142,17 @@ export function parseRelayConfig(input: string): RelayConfig {
 }
 
 export function validateRelayConfig(input: unknown): RelayConfig {
-  const apps = validateAppServerConfig(input);
   if (!isRecord(input)) {
     throw new Error('Relay config must be an object.');
   }
 
   return {
-    apps,
+    apps: validateAppServerConfig(input),
     clientJwt: validateClientJwtConfig(input.clientJwt)
   };
 }
 
-function validateAppServerConfig(input: unknown): AppServerConfig[] {
-  if (!isRecord(input)) {
-    throw new Error('Relay config must be an object.');
-  }
+function validateAppServerConfig(input: Record<string, unknown>): AppServerConfig[] {
   if (input.apps === undefined) {
     return [];
   }
@@ -258,18 +257,11 @@ export function validateVerifiedClientIdentity(input: unknown): VerifiedClientId
 }
 
 function decodePreSharedKey(value: unknown) {
-  if (
-    typeof value !== 'string'
-    || value.length !== PRE_SHARED_KEY_ENCODED_LENGTH
-    || !PRE_SHARED_KEY_PATTERN.test(value)
-  ) {
+  if (typeof value !== 'string' || !PRE_SHARED_KEY_PATTERN.test(value)) {
     return null;
   }
 
-  const decoded = Buffer.from(value, 'hex');
-  return decoded.length === PRE_SHARED_KEY_BYTES && decoded.toString('hex') === value
-    ? decoded
-    : null;
+  return Buffer.from(value, 'hex');
 }
 
 function validateNonEmptyString(value: unknown, label: string) {

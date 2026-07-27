@@ -6,6 +6,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "clean": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prebuild": "npm run clean",
     "dev": "concurrently -k -n server,admin \"npm:dev:server\" \"npm:dev:admin\"",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:admin": "vite",
@@ -28,7 +30,6 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/express": "^5.0.3",

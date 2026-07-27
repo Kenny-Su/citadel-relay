@@ -55,7 +55,7 @@ Registrations live in `relay.sqlite`. Only SHA-256 key digests are persisted,
 and creating, rotating, or deleting a registration takes effect immediately.
 Rotation and deletion disconnect the current app server and its clients.
 
-`relay.config.json`, `relay.sqlite`, and local key files are ignored by Git.
+`relay.config.json`, `relay.sqlite`, and `client-jwt-public.pem` are ignored by Git.
 The required `clientJwt` block applies to every app. Citadel loads the SPKI
 public key once at startup and accepts only the configured asymmetric
 algorithm. A relative `publicKeyPath` is resolved from the process working

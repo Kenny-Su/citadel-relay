@@ -59,14 +59,14 @@ describe('legacy relay config migration', () => {
 
     const prepared = prepareRelayConfig(paths.configPath, store);
 
-    expect(prepared.migratedLegacyApps).toBe(2);
+    expect(prepared).toBe(2);
     expect(store.authenticate(chatKey)).toEqual({ appId: 'chat' });
     expect(store.authenticate(filesKey)).toEqual({ appId: 'files' });
     expect(JSON.parse(readFileSync(paths.configPath, 'utf8'))).toEqual(config());
     expect(readFileSync(paths.configPath, 'utf8')).not.toContain(chatKey);
     expect(statSync(paths.configPath).mode & 0o777).toBe(0o600);
 
-    expect(prepareRelayConfig(paths.configPath, store).migratedLegacyApps).toBe(0);
+    expect(prepareRelayConfig(paths.configPath, store)).toBe(0);
     expect(store.list().map(({ appId }) => appId)).toEqual(['chat', 'files']);
     store.close();
   });
@@ -78,7 +78,7 @@ describe('legacy relay config migration', () => {
 
     const prepared = prepareRelayConfig(paths.configPath, store);
 
-    expect(prepared.migratedLegacyApps).toBe(0);
+    expect(prepared).toBe(0);
     expect(store.hasCompletedLegacyMigration()).toBe(true);
     expect(store.list()).toEqual([]);
     store.close();
@@ -109,7 +109,7 @@ describe('legacy relay config migration', () => {
     expect(JSON.parse(readFileSync(paths.configPath, 'utf8')).apps).toHaveLength(1);
 
     const retried = prepareRelayConfig(paths.configPath, store);
-    expect(retried.migratedLegacyApps).toBe(0);
+    expect(retried).toBe(0);
     expect(JSON.parse(readFileSync(paths.configPath, 'utf8'))).toEqual(config());
     expect(store.authenticate(chatKey)).toEqual({ appId: 'chat' });
     store.close();
