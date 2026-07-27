@@ -6,7 +6,6 @@ relay.sqlite
 relay.sqlite-journal
 relay.sqlite-shm
 relay.sqlite-wal
-client-jwt-private.pem
 client-jwt-public.pem
 deploy/relay.config.json
 deploy/client-jwt-public.pem
