@@ -3,7 +3,8 @@
 Citadel is an authenticated app router. App servers authenticate with pre-shared
 keys that map them to identifiers such as `chat`. Every client
 authenticates with a JWT signed by the configured identity service. Citadel verifies
-client identity, while each app server makes every admission and ACL decision.
+the token and forwards it unchanged, while each app server interprets its claims and
+makes every admission and ACL decision.
 
 All WebSocket traffic passes through Citadel. Clients can send packets only upstream
 to their app server. Only the authenticated app server can unicast or broadcast
@@ -123,10 +124,10 @@ A client opens `chat` with required JWT credentials and optional opaque app hand
 Missing or invalid credentials fail authentication before the app server is notified.
 
 The relay verifies a supplied JWT and gives the app server a pending connection
-with a trusted `subject`. It never forwards the bearer token or other JWT
-claims. Pending client packets and server unicasts form a restricted handshake
+with the original bearer token. Citadel does not interpret its claims. Pending
+client packets and server unicasts form a restricted handshake
 tunnel. The Chat server applies its ACL and responds with `app:accept` or
-`app:reject`; verified identity never implies admission.
+`app:reject`; a verified token never implies admission.
 
 After acceptance:
 
@@ -134,7 +135,7 @@ After acceptance:
 Browser A → Relay → Chat server → Relay → Browser B
 ```
 
-- Clients send `client:packet`; the relay adds their trusted connection ID and verified identity, then sends only to the app server.
+- Clients send `client:packet`; the relay adds their trusted connection ID, then sends only to the app server.
 - App servers send `server:packet`; `target: "all"` reaches admitted clients and a connection target performs unicast.
 - Packets do not carry an app ID; the route is fixed when the socket authenticates or opens an app.
 - A client cannot target another client or request a broadcast.

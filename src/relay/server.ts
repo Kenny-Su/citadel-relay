@@ -11,15 +11,13 @@ import {
   type RelayInboundMessage,
   type RelayOutboundMessage,
   type ServerPacketMessage,
-  type VerifiedClientIdentity,
   isAppId
 } from './shared.js';
 import {
   AUTH_TOKEN_MAX_LENGTH,
   type RelayAppServerAuthenticator,
   type RelayClientAuthenticator,
-  validateAuthenticatedAppServer,
-  validateVerifiedClientIdentity
+  validateAuthenticatedAppServer
 } from './auth.js';
 import { RELAY_VERSION } from './version.js';
 import { createTrafficLogger } from './trafficLog.js';
@@ -36,7 +34,7 @@ type ConnectionRecord = {
   authenticating: boolean;
   openingApp: boolean;
   authenticationTimer?: ReturnType<typeof setTimeout>;
-  clientIdentity?: VerifiedClientIdentity;
+  clientAuthenticated: boolean;
   appServer?: AuthenticatedAppServer;
 };
 
@@ -46,7 +44,6 @@ type ClientSession = {
   requestId: string;
   state: AppClientState;
   admissionTimer: ReturnType<typeof setTimeout>;
-  identity: VerifiedClientIdentity;
 };
 
 type HealthResponse = {
@@ -149,7 +146,7 @@ export function createRelayServer(options: RelayServerOptions) {
   function isAuthenticatedConnection(socket: WebSocket) {
     const connection = connections.get(socket);
     return connection?.appServer !== undefined
-      || connection?.clientIdentity !== undefined;
+      || connection?.clientAuthenticated === true;
   }
 
   function sendClientState(
@@ -191,8 +188,7 @@ export function createRelayServer(options: RelayServerOptions) {
         type: 'app:disconnect',
         connectionId: connection.connectionId,
         admitted: session.state === 'admitted',
-        reason: options.reason,
-        identity: session.identity
+        reason: options.reason
       });
     }
   }
@@ -243,7 +239,7 @@ export function createRelayServer(options: RelayServerOptions) {
     const connection = connections.get(socket);
     if (!connection) return;
 
-    if (connection.clientIdentity) {
+    if (connection.clientAuthenticated) {
       sendError(socket, 'An app client cannot authenticate as an app server.');
       return;
     }
@@ -340,12 +336,9 @@ export function createRelayServer(options: RelayServerOptions) {
     }
 
     connection.openingApp = true;
-    let identity: VerifiedClientIdentity | null = null;
+    let authenticated = false;
     try {
-      const authenticated = await options.authenticateClient(credential.token);
-      identity = authenticated === null
-        ? null
-        : validateVerifiedClientIdentity(authenticated);
+      authenticated = await options.authenticateClient(credential.token);
     } catch (error) {
       if (traffic.enabled) {
         traffic.log({
@@ -360,13 +353,13 @@ export function createRelayServer(options: RelayServerOptions) {
     if (!authenticatedConnection) return;
     authenticatedConnection.openingApp = false;
 
-    if (!identity) {
+    if (!authenticated) {
       sendError(socket, 'Client authentication failed.');
       socket.close(4401, 'Client authentication failed');
       return;
     }
 
-    authenticatedConnection.clientIdentity = identity;
+    authenticatedConnection.clientAuthenticated = true;
     clearAuthenticationTimer(socket);
 
     if (!isAppId(message.appId)) {
@@ -393,8 +386,7 @@ export function createRelayServer(options: RelayServerOptions) {
       appServer,
       requestId,
       state: 'pending',
-      admissionTimer,
-      identity
+      admissionTimer
     };
 
     clientSessions.set(socket, session);
@@ -411,7 +403,7 @@ export function createRelayServer(options: RelayServerOptions) {
       type: 'app:connect',
       requestId,
       connectionId: connection.connectionId,
-      identity,
+      credential,
       ...('hello' in message ? { hello: message.hello } : {})
     });
   }
@@ -502,8 +494,7 @@ export function createRelayServer(options: RelayServerOptions) {
       type: 'client:packet',
       from: {
         connectionId: connection.connectionId,
-        state: session.state,
-        identity: session.identity
+        state: session.state
       },
       ...('payload' in message ? { payload: message.payload } : {})
     });
@@ -685,7 +676,8 @@ export function createRelayServer(options: RelayServerOptions) {
     const connection: ConnectionRecord = {
       connectionId,
       authenticating: false,
-      openingApp: false
+      openingApp: false,
+      clientAuthenticated: false
     };
     connections.set(socket, connection);
     socketsByConnectionId.set(connectionId, socket);

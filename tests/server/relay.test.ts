@@ -12,8 +12,7 @@ import type {
   RelayClientPacketMessage,
   RelayErrorMessage,
   RelayOutboundMessage,
-  RelayServerPacketMessage,
-  VerifiedClientIdentity
+  RelayServerPacketMessage
 } from '../../src/relay/app.js';
 
 function waitForOpen(socket: WebSocket) {
@@ -81,12 +80,8 @@ describe('citadel app relay', () => {
   let url: string;
   let authenticateClient: RelayClientAuthenticator;
   const sockets: WebSocket[] = [];
-  const clientIdentity: VerifiedClientIdentity = {
-    subject: 'client-42'
-  };
-
   beforeEach(async () => {
-    authenticateClient = (token) => token === 'valid-client-jwt' ? clientIdentity : null;
+    authenticateClient = (token) => token === 'valid-client-jwt';
     server = createRelayServer({
       authenticateAppServer(token) {
         if (token === 'chat-server-key') {
@@ -190,7 +185,7 @@ describe('citadel app relay', () => {
     );
     expect(() => createRelayServer({
       authenticateAppServer: () => null,
-      authenticateClient: () => null,
+      authenticateClient: () => false,
       authenticationTimeoutMs: 0
     })).toThrow('authenticationTimeoutMs must be a positive number');
   });
@@ -216,7 +211,7 @@ describe('citadel app relay', () => {
     const appServer = await connectAppServer();
     const browser = await connectSocket();
     const request = await openPending(browser, appServer, 'chat', { mode: 'member' });
-    expect(request.identity).toEqual(clientIdentity);
+    expect(request.credential).toEqual({ type: 'jwt', token: 'valid-client-jwt' });
 
     const credentials = waitForMessage<RelayClientPacketMessage<{ token: string }>>(appServer, 'client:packet');
     sendJson(browser, { type: 'client:packet', payload: { token: 'app-owned-token' } });
@@ -225,8 +220,7 @@ describe('citadel app relay', () => {
       type: 'client:packet',
       from: {
         connectionId: request.connectionId,
-        state: 'pending',
-        identity: clientIdentity
+        state: 'pending'
       },
       payload: { token: 'app-owned-token' }
     });
@@ -245,7 +239,7 @@ describe('citadel app relay', () => {
     await acceptPending(browser, appServer, request.requestId);
   });
 
-  it('binds verified JWT identity to a pending client without performing admission', async () => {
+  it('forwards the verified JWT to the app without interpreting it', async () => {
     const appServer = await connectAppServer();
     const browser = await connectSocket();
     const request = await openPending(
@@ -261,7 +255,7 @@ describe('citadel app relay', () => {
       { type: 'jwt', token: 'valid-client-jwt' }
     );
 
-    expect(request.identity).toEqual(clientIdentity);
+    expect(request.credential).toEqual({ type: 'jwt', token: 'valid-client-jwt' });
     const noAutomaticAdmission = await expectNoMessage<AppClientStateMessage>(
       browser,
       'app:state'
@@ -278,8 +272,7 @@ describe('citadel app relay', () => {
     expect(await packet).toMatchObject({
       from: {
         connectionId: request.connectionId,
-        state: 'pending',
-        identity: clientIdentity
+        state: 'pending'
       },
       payload: { identity: { subject: 'attacker' } }
     });
@@ -303,8 +296,7 @@ describe('citadel app relay', () => {
     sendJson(browser, { type: 'app:close' });
     expect(await disconnected).toMatchObject({
       connectionId: request.connectionId,
-      admitted: true,
-      identity: clientIdentity
+      admitted: true
     });
   });
 
@@ -349,7 +341,7 @@ describe('citadel app relay', () => {
     expect(await appServerConnect).toBeNull();
   });
 
-  it('verifies identity before revealing app availability', async () => {
+  it('verifies the token before revealing app availability', async () => {
     const browser = await connectSocket();
     const failed = waitForMessage<RelayErrorMessage>(browser, 'error:notice');
     const closed = new Promise<number>((resolve) => {
@@ -382,7 +374,7 @@ describe('citadel app relay', () => {
   it('closes a connection that does not authenticate before the setup deadline', async () => {
     const timeoutServer = createRelayServer({
       authenticateAppServer: () => null,
-      authenticateClient: () => null,
+      authenticateClient: () => false,
       authenticationTimeoutMs: 20
     });
     await listen(timeoutServer.httpServer);
@@ -417,7 +409,7 @@ describe('citadel app relay', () => {
   });
 
   it('closes a connection that sends more traffic while authentication is pending', async () => {
-    let completeAuthentication: ((identity: VerifiedClientIdentity) => void) | undefined;
+    let completeAuthentication: ((authenticated: boolean) => void) | undefined;
     authenticateClient = () => new Promise((resolve) => {
       completeAuthentication = resolve;
     });
@@ -439,11 +431,11 @@ describe('citadel app relay', () => {
     expect((await duplicate).message).toBe('Authentication is already in progress.');
     expect(await closed).toBe(4401);
 
-    completeAuthentication?.(clientIdentity);
+    completeAuthentication?.(true);
     expect(await appServerConnect).toBeNull();
   });
 
-  it('lets the app server reject admission after relay-verified client identity', async () => {
+  it('lets the app server reject admission after relay token verification', async () => {
     const appServer = await connectAppServer();
     const browser = await connectSocket();
     const request = await openPending(browser, appServer);

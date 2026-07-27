@@ -31,7 +31,6 @@ describe('relay server import boundaries', () => {
       'APP_ID_PATTERN',
       'AUTH_TOKEN_MAX_LENGTH',
       'CLIENT_JWT_CLOCK_TOLERANCE_SECONDS',
-      'CLIENT_SUBJECT_MAX_LENGTH',
       'PRE_SHARED_KEY_BYTES',
       'PRE_SHARED_KEY_ENCODED_LENGTH',
       'createAppServerAuthenticator',
@@ -40,8 +39,7 @@ describe('relay server import boundaries', () => {
       'parseRelayConfig',
       'validateAuthenticatedAppServer',
       'validateClientJwtConfig',
-      'validateRelayConfig',
-      'validateVerifiedClientIdentity'
+      'validateRelayConfig'
     ].sort());
     expect(sortedExportKeys(serverRuntime)).toEqual(['createRelayServer']);
   });

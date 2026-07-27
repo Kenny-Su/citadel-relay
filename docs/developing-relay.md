@@ -26,8 +26,8 @@ npm run build
 
 Keep client token issuance in the identity server. Keep ACLs, subrooms,
 presence, app validation, persistence, and domain behavior in app servers. The
-relay loads only the public key, verifies global client JWT identity, and
-forwards only the trusted subject; identity must never imply admission or
+relay loads only the public key, verifies each client JWT without interpreting
+its claims, and forwards the valid token to the selected app; verification must never imply admission or
 authorization.
 
 Keep IP rate limits, concurrent-connection quotas, TLS termination, and volumetric abuse controls at the reverse proxy or network edge. The relay only enforces its short authentication deadline, first-message role gate, and message-size bound.

@@ -32,7 +32,7 @@ describe('traffic logger', () => {
     expect(JSON.parse(lines[0]).payload).toEqual({ value: 7 });
   });
 
-  it('keeps JWT credentials and verified identity out of routing diagnostics', () => {
+  it('keeps JWT credentials out of routing diagnostics', () => {
     const lines: string[] = [];
     const logger = createTrafficLogger({
       level: 'payload',

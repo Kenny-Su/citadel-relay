@@ -2,7 +2,7 @@
 
 Citadel routes opaque traffic between authenticated clients and authenticated
 app servers. It enforces one live server per app, packet direction, and client
-JWT identity. An app ID selects an app server; spaces, rooms, admission, ACLs,
+JWT verification. An app ID selects an app server; spaces, rooms, admission, ACLs,
 presence, and application behavior remain inside that app.
 
 ## Transport
@@ -130,20 +130,21 @@ The app server receives:
   type: 'app:connect';
   requestId: string;
   connectionId: string;
-  identity: {
-    subject: string;
+  credential: {
+    type: 'jwt';
+    token: string;
   };
   hello?: unknown;
 }
 ```
 
-`identity.subject` is copied from the verified JWT subject and is fixed for that
-app session. Citadel does not forward the original bearer token, issuer,
-protected header, or other claims. JWT expiration after the session opens does
-not automatically disconnect the client.
+`credential.token` is the original, verified JWT. Citadel validates its
+signature, algorithm, expiration, and not-before time but does not interpret
+application claims. JWT expiration after the session opens does not
+automatically disconnect the client.
 
 Pending clients cannot receive broadcasts. They can exchange unicast handshake
-packets with the app server. Verified identity does not change the pending
+packets with the app server. Token verification does not change the pending
 state.
 
 ## App-Owned Admission
@@ -177,7 +178,7 @@ server can later revoke either a pending or admitted connection:
 
 The client can explicitly send `{ type: 'app:close' }`. On closure or
 disconnect, the app server receives `app:disconnect` with the trusted connection
-ID, prior admission state, and verified identity.
+ID and prior admission state.
 
 ## Upstream Client Packets
 
@@ -190,7 +191,7 @@ A pending or admitted client sends:
 }
 ```
 
-The client cannot choose a target. Citadel sends only to the app server and adds trusted routing and identity metadata:
+The client cannot choose a target. Citadel sends only to the app server and adds trusted routing metadata:
 
 ```ts
 {
@@ -198,15 +199,12 @@ The client cannot choose a target. Citadel sends only to the app server and adds
   from: {
     connectionId: string;
     state: 'pending' | 'admitted';
-    identity: {
-      subject: string;
-    };
   };
   payload?: unknown;
 }
 ```
 
-Identity-like data inside `payload` remains untrusted application data and cannot replace `from.identity`.
+Identity-like data inside `payload` remains untrusted application data.
 
 ## Downstream Server Packets
 
@@ -245,12 +243,12 @@ cannot select or restate an app. Citadel does not inspect or validate `payload`.
 - Unauthenticated sockets have a five-second setup deadline and cannot probe app availability.
 - Pre-authentication garbage and concurrent authentication messages close the socket.
 - WebSocket messages are limited to 64 KiB.
-- Verified client identity is immutable for an app session and never grants admission by itself.
-- Citadel forwards only the verified subject to that app server and never forwards the original JWT or other claims.
+- A verified client token is forwarded unchanged and never grants admission by itself.
+- Citadel forwards the original verified JWT to that app server without interpreting its claims.
 - Client packets travel only to the app server.
 - Only app servers can unicast or broadcast downstream.
 - Broadcasts exclude pending and rejected clients.
-- The relay, not `hello` or payload data, supplies trusted connection and client identity.
+- The relay supplies trusted connection metadata and the verified token.
 - Losing an app server closes every connection for its app.
 - Connection and admission state is in memory and disappears when the process
   exits; app registrations persist in SQLite.

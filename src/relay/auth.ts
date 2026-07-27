@@ -1,14 +1,10 @@
 import { createPublicKey, timingSafeEqual, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { jwtVerify } from 'jose';
-import type {
-  AuthenticatedAppServer,
-  VerifiedClientIdentity
-} from './shared.js';
+import type { AuthenticatedAppServer } from './shared.js';
 import { isAppId } from './shared.js';
 
 export const AUTH_TOKEN_MAX_LENGTH = 8_192;
-export const CLIENT_SUBJECT_MAX_LENGTH = 256;
 export const PRE_SHARED_KEY_BYTES = 32;
 export const PRE_SHARED_KEY_ENCODED_LENGTH = 64;
 export const CLIENT_JWT_CLOCK_TOLERANCE_SECONDS = 5;
@@ -35,7 +31,7 @@ export type RelayAppServerAuthenticator = (
 
 export type RelayClientAuthenticator = (
   token: string
-) => VerifiedClientIdentity | null | Promise<VerifiedClientIdentity | null>;
+) => boolean | Promise<boolean>;
 
 export type AppServerConfig = {
   appId: string;
@@ -102,28 +98,18 @@ export function createJwtClientAuthenticator(config: ClientJwtConfig): RelayClie
       || token.length === 0
       || token.length > AUTH_TOKEN_MAX_LENGTH
     ) {
-      return null;
+      return false;
     }
 
     try {
-      const { payload } = await jwtVerify(token, publicKey, {
+      await jwtVerify(token, publicKey, {
         algorithms: [validated.algorithm],
         clockTolerance: CLIENT_JWT_CLOCK_TOLERANCE_SECONDS,
-        requiredClaims: ['sub', 'exp']
+        requiredClaims: ['exp']
       });
-
-      if (
-        !isValidClientSubject(payload.sub)
-        || typeof payload.exp !== 'number'
-      ) {
-        return null;
-      }
-
-      return {
-        subject: payload.sub
-      };
+      return true;
     } catch {
-      return null;
+      return false;
     }
   };
 }
@@ -239,22 +225,6 @@ export function validateClientJwtConfig(input: unknown): ClientJwtConfig {
   };
 }
 
-export function validateVerifiedClientIdentity(input: unknown): VerifiedClientIdentity {
-  if (!isRecord(input)) {
-    throw new Error('Client authentication must return an identity object.');
-  }
-
-  if (!isValidClientSubject(input.subject)) {
-    throw new Error(
-      `Client identity subjects must be between 1 and ${CLIENT_SUBJECT_MAX_LENGTH} characters without control characters.`
-    );
-  }
-
-  return {
-    subject: input.subject
-  };
-}
-
 function decodePreSharedKey(value: unknown) {
   if (typeof value !== 'string' || !PRE_SHARED_KEY_PATTERN.test(value)) {
     return null;
@@ -287,13 +257,6 @@ function loadPublicKey(publicKeyPath: string): KeyObject {
   } catch {
     throw new Error('Client JWT public key must be a valid PEM-encoded SPKI public key.');
   }
-}
-
-function isValidClientSubject(value: unknown): value is string {
-  return typeof value === 'string'
-    && value.length > 0
-    && value.length <= CLIENT_SUBJECT_MAX_LENGTH
-    && !/[\u0000-\u001f\u007f]/.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

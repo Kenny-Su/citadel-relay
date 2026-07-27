@@ -23,13 +23,11 @@ export {
   type RelayServerPacketMessage,
   type RevokeAppClientMessage,
   type ServerPacketMessage,
-  type ServerPacketTarget,
-  type VerifiedClientIdentity
+  type ServerPacketTarget
 } from './shared.js';
 export {
   AUTH_TOKEN_MAX_LENGTH,
   CLIENT_JWT_CLOCK_TOLERANCE_SECONDS,
-  CLIENT_SUBJECT_MAX_LENGTH,
   PRE_SHARED_KEY_BYTES,
   PRE_SHARED_KEY_ENCODED_LENGTH,
   createAppServerAuthenticator,
@@ -38,7 +36,6 @@ export {
   validateAuthenticatedAppServer,
   validateClientJwtConfig,
   validateRelayConfig,
-  validateVerifiedClientIdentity,
   type AppServerConfig,
   type AppServerKeyConfig,
   type ClientJwtConfig,

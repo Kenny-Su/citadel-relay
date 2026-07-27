@@ -20,8 +20,7 @@ import {
   parseRelayConfig,
   validateAuthenticatedAppServer,
   validateClientJwtConfig,
-  validateRelayConfig,
-  validateVerifiedClientIdentity
+  validateRelayConfig
 } from '../../src/relay/auth.js';
 
 function testKey(fill: number) {
@@ -162,17 +161,9 @@ describe('relay authentication', () => {
       publicKeyPath: './keys/client-jwt-public.pem',
       algorithm: 'HS256'
     })).toThrow('asymmetric algorithm');
-    expect(validateVerifiedClientIdentity({
-      issuer: 'https://identity.example.com/',
-      subject: 'client-42',
-      claims: { role: 'admin' }
-    })).toEqual({ subject: 'client-42' });
-    expect(() => validateVerifiedClientIdentity({
-      subject: 'x'.repeat(257)
-    })).toThrow('Client identity subjects');
   });
 
-  it('verifies client JWT identity with a local public key', async () => {
+  it('verifies a client JWT without interpreting its claims', async () => {
     const keyPair = await generateKeyPair('RS256');
     const publicKeyPath = await writePublicKey(keyPair.publicKey);
     const authenticate = createJwtClientAuthenticator({
@@ -187,7 +178,7 @@ describe('relay authentication', () => {
       claims: { role: 'member', groups: ['chat'] }
     });
 
-    expect(await authenticate(token)).toEqual({ subject: 'client-42' });
+    expect(await authenticate(token)).toBe(true);
   });
 
   it('verifies client JWTs without enforcing issuer or audience', async () => {
@@ -207,11 +198,11 @@ describe('relay authentication', () => {
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       ...valid,
       issuer: 'https://other.example.com/'
-    }))).toEqual({ subject: 'client-42' });
+    }))).toBe(true);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       ...valid,
       audience: 'another-service'
-    }))).toEqual({ subject: 'client-42' });
+    }))).toBe(true);
   });
 
   it('rejects invalid client JWT signatures and claims', async () => {
@@ -231,30 +222,30 @@ describe('relay authentication', () => {
       expirationTime: now + 300
     };
 
-    expect(await authenticate('x'.repeat(8_193))).toBeNull();
-    expect(await authenticate(await signClientJwt(untrusted.privateKey, valid))).toBeNull();
+    expect(await authenticate('x'.repeat(8_193))).toBe(false);
+    expect(await authenticate(await signClientJwt(untrusted.privateKey, valid))).toBe(false);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       expirationTime: now + 300
-    }))).toBeNull();
+    }))).toBe(true);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       subject: 'client-42'
-    }))).toBeNull();
+    }))).toBe(false);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       subject: 'client-42',
       expirationTime: now - 10
-    }))).toBeNull();
+    }))).toBe(false);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       ...valid,
       notBefore: now + 60
-    }))).toBeNull();
+    }))).toBe(false);
     expect(await authenticate(await signClientJwt(trusted.privateKey, {
       ...valid,
       subject: 'x'.repeat(257)
-    }))).toBeNull();
+    }))).toBe(true);
     expect(await createJwtClientAuthenticator({
       ...config,
       algorithm: 'PS256'
-    })(await signClientJwt(trusted.privateKey, valid))).toBeNull();
+    })(await signClientJwt(trusted.privateKey, valid))).toBe(false);
   });
 
   it('rejects missing, malformed, and private key files at startup', async () => {

@@ -5,10 +5,6 @@ export type AuthenticatedAppServer = {
   appId: string;
 };
 
-export type VerifiedClientIdentity = {
-  subject: string;
-};
-
 export type JwtClientCredential = {
   type: 'jwt';
   token: string;
@@ -92,7 +88,7 @@ export type AppConnectMessage<THello = unknown> = {
   type: 'app:connect';
   requestId: string;
   connectionId: string;
-  identity: VerifiedClientIdentity;
+  credential: JwtClientCredential;
   hello?: THello;
 };
 
@@ -101,7 +97,6 @@ export type AppDisconnectMessage = {
   connectionId: string;
   admitted: boolean;
   reason: 'client-closed' | 'client-disconnected' | 'admission-timeout';
-  identity: VerifiedClientIdentity;
 };
 
 export type RelayClientPacketMessage<TPayload = unknown> = {
@@ -109,7 +104,6 @@ export type RelayClientPacketMessage<TPayload = unknown> = {
   from: {
     connectionId: string;
     state: AppClientState;
-    identity: VerifiedClientIdentity;
   };
   payload?: TPayload;
 };
