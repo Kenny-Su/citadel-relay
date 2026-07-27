@@ -151,8 +151,14 @@ export function validateRelayConfig(input: unknown): RelayConfig {
 }
 
 function validateAppServerConfig(input: unknown): AppServerConfig[] {
-  if (!isRecord(input) || !Array.isArray(input.apps) || input.apps.length === 0) {
-    throw new Error('Relay config must contain a non-empty apps array.');
+  if (!isRecord(input)) {
+    throw new Error('Relay config must be an object.');
+  }
+  if (input.apps === undefined) {
+    return [];
+  }
+  if (!Array.isArray(input.apps)) {
+    throw new Error('Relay config apps must be an array when provided.');
   }
 
   const keys = new Set<string>();

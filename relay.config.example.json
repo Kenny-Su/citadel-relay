@@ -1,10 +1,4 @@
 {
-  "apps": [
-    {
-      "preSharedKey": "REPLACE_WITH_OUTPUT_OF_OPENSSL_RAND_HEX_32",
-      "appId": "app"
-    }
-  ],
   "clientJwt": {
     "issuer": "citadel-local",
     "audience": "citadel-relay",

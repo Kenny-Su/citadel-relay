@@ -29,7 +29,7 @@ function sortedExportKeys(module: Record<string, unknown>) {
 }
 
 describe('relay server import boundaries', () => {
-  it('keeps only relay entrypoints in source', () => {
+  it('keeps the relay core isolated from the admin control plane', () => {
     expect(exists('src/relay/app.ts')).toBe(true);
     expect(exists('src/relay/server.ts')).toBe(true);
     expect(exists('src/relay/shared.ts')).toBe(true);
@@ -37,6 +37,9 @@ describe('relay server import boundaries', () => {
     expect(exists('src/relay/validation.ts')).toBe(false);
 
     expect(exists('src/client')).toBe(false);
+    expect(exists('src/admin/client/App.tsx')).toBe(true);
+    expect(exists('src/admin/adminApi.ts')).toBe(true);
+    expect(exists('src/admin/registrationStore.ts')).toBe(true);
     expect(exists('src/bundledApps')).toBe(false);
     expect(exists('src/server/extensions.ts')).toBe(false);
     expect(exists('src/platform')).toBe(false);
@@ -45,7 +48,7 @@ describe('relay server import boundaries', () => {
     expect(exists('bundled-apps.json')).toBe(false);
   });
 
-  it('removes app-host dependencies and keeps raw websocket dependencies', () => {
+  it('keeps raw websocket dependencies and adds only the admin UI stack', () => {
     const rootPackage = jsonSource<PackageJson>('package.json');
     const dependencies = rootPackage.dependencies ?? {};
     const devDependencies = rootPackage.devDependencies ?? {};
@@ -55,22 +58,20 @@ describe('relay server import boundaries', () => {
     expect(dependencies.ws).toBeDefined();
     expect(devDependencies['@types/ws']).toBeDefined();
 
-    for (const packageName of [
-      '@vitejs/plugin-react',
-      'concurrently',
-      'react',
-      'react-dom',
-      'socket.io',
-      'socket.io-client',
-      'vite'
-    ]) {
+    expect(dependencies.react).toBeDefined();
+    expect(dependencies['react-dom']).toBeDefined();
+    expect(devDependencies['@vitejs/plugin-react']).toBeDefined();
+    expect(devDependencies.vite).toBeDefined();
+    expect(devDependencies.concurrently).toBeDefined();
+
+    for (const packageName of ['socket.io', 'socket.io-client']) {
       expect(dependencies[packageName]).toBeUndefined();
       expect(devDependencies[packageName]).toBeUndefined();
     }
 
     expect(rootPackage.scripts).not.toHaveProperty('generate:bundled-apps');
-    expect(rootPackage.scripts).not.toHaveProperty('build:client');
-    expect(rootPackage.scripts).not.toHaveProperty('dev:client');
+    expect(rootPackage.scripts).toHaveProperty('build:admin');
+    expect(rootPackage.scripts).toHaveProperty('dev:admin');
   });
 
   it('exports relay contracts and runtime values', () => {
@@ -106,5 +107,18 @@ describe('relay server import boundaries', () => {
     expect(protocol).toContain('server:packet');
     expect(readme).not.toContain('bundled apps');
     expect(protocol).not.toContain('installed app catalog');
+  });
+
+  it('keeps JWT signing and private keys out of the relay control plane', () => {
+    const adminApi = source('src/admin/adminApi.ts');
+    const startup = source('src/server/index.ts');
+    const exampleConfig = source('relay.config.example.json');
+
+    for (const content of [adminApi, startup, exampleConfig]) {
+      expect(content).not.toContain('SignJWT');
+      expect(content).not.toContain('privateKeyPath');
+      expect(content).not.toContain('/tokens');
+    }
+    expect(exampleConfig).toContain('publicKeyPath');
   });
 });

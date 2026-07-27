@@ -2,10 +2,20 @@
   "name": "citadel-relay",
   "version": "0.8.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "dev": "tsx watch src/server/index.ts",
-    "build": "npm run typecheck",
-    "typecheck": "tsc -p tsconfig.server.json --noEmit",
+    "dev": "concurrently -k -n server,admin \"npm:dev:server\" \"npm:dev:admin\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:admin": "vite",
+    "build": "npm run typecheck && npm run build:server && npm run build:admin",
+    "build:server": "tsc -p tsconfig.build.json",
+    "build:admin": "vite build",
+    "start": "node dist/server/server/index.js",
+    "typecheck": "npm run typecheck:server && npm run typecheck:admin",
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
+    "typecheck:admin": "tsc -p tsconfig.client.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -13,14 +23,25 @@
     "express": "^5.1.0",
     "jose": "^6.2.4",
     "nanoid": "^5.1.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.4",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "^10.0.4",
+    "jsdom": "^29.1.1",
     "tsx": "^4.20.3",
     "typescript": "^6.0.3",
+    "vite": "^8.1.5",
     "vitest": "^4.1.9"
   }
 }

@@ -594,6 +594,88 @@ describe('citadel app relay', () => {
     expect((await cannotSend).message).toBe('Only a connected app client can send client packets.');
   });
 
+  it('reports per-app connection, client, and pending-client status', async () => {
+    expect(server.getAppStatus('chat')).toEqual({
+      appId: 'chat',
+      connected: false,
+      clients: 0,
+      pendingClients: 0
+    });
+
+    const appServer = await connectAppServer();
+    const admittedClient = await connectSocket();
+    const pendingClient = await connectSocket();
+    await openAndAccept(admittedClient, appServer);
+    await openPending(pendingClient, appServer);
+
+    expect(server.getAppStatus('chat')).toEqual({
+      appId: 'chat',
+      connected: true,
+      clients: 2,
+      pendingClients: 1
+    });
+    expect(server.getAppStatus('files')).toEqual({
+      appId: 'files',
+      connected: false,
+      clients: 0,
+      pendingClients: 0
+    });
+  });
+
+  it('administratively disconnects one app and all its clients', async () => {
+    const chatAppServer = await connectAppServer();
+    const filesAppServer = await connectAppServer('files-server-key');
+    const admittedChatClient = await connectSocket();
+    const pendingChatClient = await connectSocket();
+    const filesClient = await connectSocket();
+    await openAndAccept(admittedChatClient, chatAppServer);
+    await openPending(pendingChatClient, chatAppServer);
+    const filesState = await openAndAccept(filesClient, filesAppServer, 'files');
+
+    const closedSockets = [chatAppServer, admittedChatClient, pendingChatClient].map(
+      (socket) => new Promise<{ code: number; reason: string }>((resolve) => {
+        socket.once('close', (code, reason) => resolve({
+          code,
+          reason: reason.toString()
+        }));
+      })
+    );
+
+    expect(server.disconnectApp('chat')).toBe(true);
+    expect(server.getAppStatus('chat')).toEqual({
+      appId: 'chat',
+      connected: false,
+      clients: 0,
+      pendingClients: 0
+    });
+    expect(server.getAppStatus('files')).toEqual({
+      appId: 'files',
+      connected: true,
+      clients: 1,
+      pendingClients: 0
+    });
+    expect(server.disconnectApp('chat')).toBe(false);
+    expect(await Promise.all(closedSockets)).toEqual([
+      { code: 4403, reason: 'admin disconnect' },
+      { code: 4403, reason: 'admin disconnect' },
+      { code: 4403, reason: 'admin disconnect' }
+    ]);
+
+    const downstream = waitForMessage<RelayServerPacketMessage<string>>(
+      filesClient,
+      'server:packet'
+    );
+    sendJson(filesAppServer, {
+      type: 'server:packet',
+      target: { connectionId: filesState.connectionId },
+      payload: 'still connected'
+    });
+    expect(await downstream).toEqual({
+      type: 'server:packet',
+      payload: 'still connected'
+    });
+  });
+
   it('updates health for connected apps and admitted clients', async () => {
     const appServer = await connectAppServer();
     const browser = await connectSocket();

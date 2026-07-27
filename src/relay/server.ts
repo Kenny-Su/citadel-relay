@@ -24,6 +24,8 @@ const DEFAULT_ADMISSION_TIMEOUT_MS = 60_000;
 const DEFAULT_AUTHENTICATION_TIMEOUT_MS = 5_000;
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 64 * 1_024;
 const APP_SERVER_MESSAGE_MAX_LENGTH = 256;
+const ADMIN_DISCONNECT_CODE = 4403;
+const ADMIN_DISCONNECT_REASON = 'admin disconnect';
 
 type ConnectionRecord = {
   connectionId: string;
@@ -50,6 +52,13 @@ type HealthResponse = {
   clients: number;
   pendingClients: number;
   connectedApps: number;
+};
+
+export type RelayAppStatus = {
+  appId: string;
+  connected: boolean;
+  clients: number;
+  pendingClients: number;
 };
 
 export type RelayServerOptions = {
@@ -192,6 +201,36 @@ export function createRelayServer(options: RelayServerOptions) {
       sendClientState(client, 'closed', 'The app server is unavailable.');
       removeClientSession(client, { notifyAppServer: false, reason: 'client-closed' });
     }
+  }
+
+  function getAppStatus(appId: string): RelayAppStatus {
+    const clients = appClients.get(appId);
+    let pendingClients = 0;
+
+    for (const client of clients ?? []) {
+      if (clientSessions.get(client)?.state === 'pending') pendingClients += 1;
+    }
+
+    return {
+      appId,
+      connected: appServers.has(appId),
+      clients: clients?.size ?? 0,
+      pendingClients
+    };
+  }
+
+  function disconnectApp(appId: string) {
+    const appServer = appServers.get(appId);
+    if (!appServer) return false;
+
+    const clients = [...(appClients.get(appId) ?? [])];
+    disconnectAppServer(appServer, appId);
+
+    for (const client of clients) {
+      client.close(ADMIN_DISCONNECT_CODE, ADMIN_DISCONNECT_REASON);
+    }
+    appServer.close(ADMIN_DISCONNECT_CODE, ADMIN_DISCONNECT_REASON);
+    return true;
   }
 
   async function handleAppServerAuthentication(
@@ -695,5 +734,5 @@ export function createRelayServer(options: RelayServerOptions) {
     });
   });
 
-  return { app, httpServer, wss };
+  return { app, httpServer, wss, getAppStatus, disconnectApp };
 }

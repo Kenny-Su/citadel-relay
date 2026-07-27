@@ -15,37 +15,28 @@ persistence, and domain behavior. Citadel does not issue client identities.
 
 ## Local Development
 
-Create a 256-bit app-server key:
+Provide the SPKI public key published by the trusted identity server:
 
 ```bash
-openssl rand -hex 32
+cp /path/from/identity-server/client-jwt-public.pem .
 ```
 
-Create an RSA key pair for client JWTs. Keep the private key only with the
-trusted process that authenticates clients and issues tokens:
+The corresponding private key stays in the identity server and must never be
+copied into the relay.
 
-```bash
-openssl genrsa -out client-jwt-private.pem 2048
-openssl rsa -in client-jwt-private.pem -pubout -out client-jwt-public.pem
-```
-
-Copy the example and replace its app-server key placeholder with the generated
-64-character lowercase hexadecimal value:
+Copy the relay configuration, set a development admin passphrase, and start the
+relay plus its admin frontend:
 
 ```bash
 cp relay.config.example.json relay.config.json
 npm install
+export RELAY_ADMIN_PASSPHRASE='replace-with-at-least-16-characters'
+export RELAY_ADMIN_SECURE_COOKIES=false
 npm run dev
 ```
 
 ```json
 {
-  "apps": [
-    {
-      "preSharedKey": "64-character-lowercase-hexadecimal-key",
-      "appId": "chat"
-    }
-  ],
   "clientJwt": {
     "issuer": "citadel-local",
     "audience": "citadel-relay",
@@ -55,26 +46,40 @@ npm run dev
 }
 ```
 
-`relay.config.json` and both generated key files are ignored by Git. App-server
-keys and app IDs must be unique. App IDs are lowercase identifiers such as
-`chat`, without a leading slash. The required `clientJwt` block applies to every
-app. Citadel loads the SPKI public key once at startup and accepts only the configured
-asymmetric algorithm. A relative `publicKeyPath` is resolved from the process
-working directory.
+Open `http://localhost:5173/admin/`, sign in, and register an app ID such as
+`chat`. The generated 256-bit app-server key is displayed once; store it in the
+app server's secret manager. App IDs use lowercase letters, numbers, and
+internal hyphens without a leading slash.
 
-After `npm install`, create a one-hour development token with one Node command.
-The project already depends on `jose`:
+Registrations live in `relay.sqlite`. Only SHA-256 key digests are persisted,
+and creating, rotating, or deleting a registration takes effect immediately.
+Rotation and deletion disconnect the current app server and its clients.
 
-```bash
-node --input-type=module -e 'import{readFileSync}from"node:fs";import{importPKCS8,SignJWT}from"jose";const key=await importPKCS8(readFileSync("client-jwt-private.pem","utf8"),"RS256");console.log(await new SignJWT({}).setProtectedHeader({alg:"RS256"}).setIssuer("citadel-local").setAudience("citadel-relay").setSubject(process.argv[1]??"dev-user").setIssuedAt().setExpirationTime("1h").sign(key))' dev-user
-```
+`relay.config.json`, `relay.sqlite`, and local key files are ignored by Git.
+The required `clientJwt` block applies to every app. Citadel loads the SPKI
+public key once at startup and accepts only the configured asymmetric
+algorithm. A relative `publicKeyPath` is resolved from the process working
+directory.
 
-The issuer and audience in a token must exactly match `relay.config.json`.
-Production token issuance belongs in a trusted application backend after it
-authenticates the user. Never put the private key in Citadel or distribute it to
-clients.
+The identity server issues client JWTs. Their issuer and audience must exactly
+match `relay.config.json`. Citadel only verifies those tokens and never loads a
+private key or exposes token-generation functionality.
 
-The HTTP server runs at `http://localhost:3001`. The WebSocket endpoint is `ws://localhost:3001/ws`.
+The API and WebSocket server run at `http://localhost:3001`; Vite serves the
+admin frontend at `http://localhost:5173/admin/` during development. After
+`npm run build`, `npm start` serves the admin frontend from
+`http://localhost:3001/admin/`.
+
+### Migrating Existing Registrations
+
+On the first startup after upgrading, any legacy `apps` entries in
+`relay.config.json` are imported transactionally into SQLite. Existing keys
+continue to work. Once the import is verified, Citadel atomically removes the
+plaintext app registrations from the config file and restricts it to owner-only
+permissions. The relay process therefore needs write and rename permission on
+the directory containing `relay.config.json` for this one-time migration. A
+failed cleanup is safe to retry: the imported registrations remain in SQLite
+and the next startup verifies them before removing the legacy entries.
 
 ## Connection Gate
 
@@ -141,6 +146,7 @@ See [Communication Protocol](docs/communication-protocol.md) for the complete wi
 ```bash
 npm test
 npm run typecheck
+npm run build
 ```
 
 ## Traffic Diagnostics
@@ -156,5 +162,13 @@ Summaries contain routing metadata but never authentication keys, JWTs, or verif
 ## Server Environment
 
 - `PORT`: HTTP and WebSocket port, default `3001`.
-- `RELAY_CONFIG_PATH`: PSK app-server config, default `relay.config.json`.
+- `RELAY_CONFIG_PATH`: JWT verification config and legacy migration source,
+  default `relay.config.json`.
+- `RELAY_DATABASE_PATH`: SQLite registration database, default `relay.sqlite`.
+- `RELAY_ADMIN_PASSPHRASE`: enables the admin API and frontend; must be at least
+  16 characters.
+- `RELAY_ADMIN_SECURE_COOKIES`: secure cookies are enabled unless set to
+  `false`; use `false` only for local HTTP development.
+- `RELAY_TRUST_PROXY`: set to `true` behind a trusted TLS reverse proxy so
+  same-origin checks use the forwarded protocol.
 - `RELAY_TRAFFIC_LOG`: `summary` or `payload`; other values disable logging.

@@ -111,8 +111,27 @@ describe('relay authentication', () => {
       }
     });
 
-    expect(() => parseRelayConfig('[]')).toThrow('apps array');
-    expect(() => validateRelayConfig({ apps: [] })).toThrow('non-empty');
+    expect(() => parseRelayConfig('[]')).toThrow('object');
+    expect(() => validateRelayConfig({ apps: [] })).toThrow(
+      'Client JWT configuration must be an object'
+    );
+    expect(validateRelayConfig({
+      clientJwt: {
+        issuer: 'https://identity.example.com/',
+        audience: 'citadel-relay',
+        publicKeyPath: './keys/client-jwt-public.pem',
+        algorithm: 'RS256'
+      }
+    }).apps).toEqual([]);
+    expect(() => validateRelayConfig({
+      apps: 'chat',
+      clientJwt: {
+        issuer: 'https://identity.example.com/',
+        audience: 'citadel-relay',
+        publicKeyPath: './keys/client-jwt-public.pem',
+        algorithm: 'RS256'
+      }
+    })).toThrow('apps must be an array');
     expect(() => validateRelayConfig({
       apps: [{ preSharedKey: 'too-short', appId: 'chat' }]
     })).toThrow('32 random bytes');

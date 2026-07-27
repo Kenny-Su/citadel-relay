@@ -34,16 +34,22 @@ and receives a relay-generated `connectionId`. While pending, it can exchange
 opaque handshake packets only with the app server. Once accepted, it can receive
 server broadcasts.
 
-## App Server Configuration
+## App Registration
+
+App registrations are created through the protected `/admin/` control plane.
+Citadel generates a 256-bit pre-shared key and shows it once. The SQLite
+registry stores only its SHA-256 digest. Creating a registration is live;
+rotating or deleting one immediately disconnects its current app server and
+clients.
+
+App IDs are lowercase identifiers such as `chat`, without a leading slash.
+`chat-admin` is a different app ID, and nested values such as `chat/private` are
+invalid.
+
+JWT verification remains file-configured and applies to every app:
 
 ```json
 {
-  "apps": [
-    {
-      "preSharedKey": "64-character-lowercase-hexadecimal-key",
-      "appId": "chat"
-    }
-  ],
   "clientJwt": {
     "issuer": "citadel-local",
     "audience": "citadel-relay",
@@ -53,15 +59,6 @@ server broadcasts.
 }
 ```
 
-Generate a key with `openssl rand -hex 32`. Citadel validates unique keys and app
-IDs at startup, decodes each key to exactly 32 bytes, and performs fixed-length
-constant-time comparisons.
-
-App IDs are lowercase identifiers such as `chat`, without a leading slash.
-`chat-admin` is a different app ID, and nested values such as `chat/private` are
-invalid.
-
-The top-level `clientJwt` block is required and applies to every app.
 Citadel loads one PEM-encoded SPKI public key from disk at startup and verifies
 tokens using the one configured asymmetric algorithm. Relative public-key paths
 are resolved from the process working directory. The corresponding private key
@@ -89,7 +86,7 @@ Successful response:
 }
 ```
 
-The app ID comes from relay configuration, never from the app server.
+The app ID comes from the relay registration, never from the app server.
 Disconnecting the app server unregisters the app and closes its clients.
 
 ## Opening A Client Connection
@@ -251,7 +248,8 @@ cannot select or restate an app. Citadel does not inspect or validate `payload`.
 - Broadcasts exclude pending and rejected clients.
 - The relay, not `hello` or payload data, supplies trusted connection and client identity.
 - Losing an app server closes every connection for its app.
-- Relay state is in memory and disappears when the process exits.
+- Connection and admission state is in memory and disappears when the process
+  exits; app registrations persist in SQLite.
 
 ## Errors
 
@@ -261,4 +259,7 @@ Protocol and routing failures use:
 { type: 'error:notice'; message: string }
 ```
 
-Authentication failures use WebSocket close code `4401`; oversized messages use `1009`. IP-based rate limiting and connection quotas belong at the deployment edge rather than in the app-routing protocol.
+Authentication failures use WebSocket close code `4401`; oversized messages use
+`1009`. Administrative rotation or deletion closes the affected app server and
+clients with `4403`. IP-based rate limiting and connection quotas belong at the
+deployment edge rather than in the app-routing protocol.
