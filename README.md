@@ -149,6 +149,61 @@ npm run typecheck
 npm run build
 ```
 
+## Docker Deployment
+
+The included multi-stage image builds the server and admin frontend, then runs
+them as an unprivileged user on Node.js 24. Compose stores the SQLite database
+in a named volume and mounts the JWT configuration and public key read-only.
+
+Prepare the deployment-only files:
+
+```bash
+mkdir -p deploy
+cp deploy/relay.config.example.json deploy/relay.config.json
+cp /path/from/identity-server/client-jwt-public.pem deploy/client-jwt-public.pem
+```
+
+Edit `deploy/relay.config.json` so its issuer, audience, and algorithm match the
+identity server. Keep its `publicKeyPath` set to
+`/run/secrets/client-jwt-public.pem`.
+
+Create an ignored `.env` file from the documented template, then replace the
+admin passphrase with a unique, randomly generated secret:
+
+```bash
+cp .env.example .env
+```
+
+Then build and start the service:
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl --fail http://localhost:3001/health
+```
+
+Set `RELAY_TRUST_PROXY=true` when the container is behind a trusted reverse
+proxy that terminates TLS. In production, expose the relay through that proxy
+with WebSocket upgrade support, rate limits, and concurrent-connection limits.
+Do not publish port 3001 directly to the internet.
+
+The `relay-data` volume contains the registration database. Back it up before
+upgrades and destructive registration changes. The Compose configuration uses
+a read-only relay config, so migrate any legacy plaintext `apps` entries with a
+local start before deploying; new installations should register apps through
+the admin console.
+
+Useful lifecycle commands:
+
+```bash
+docker compose logs -f relay
+docker compose restart relay
+docker compose down
+```
+
+`docker compose down` preserves the database volume. Do not add `--volumes`
+unless you intentionally want to delete all app registrations.
+
 ## Traffic Diagnostics
 
 Traffic logging is disabled by default:

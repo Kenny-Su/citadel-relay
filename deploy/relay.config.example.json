@@ -1,0 +1,8 @@
+{
+  "clientJwt": {
+    "issuer": "citadel-production",
+    "audience": "citadel-relay",
+    "publicKeyPath": "/run/secrets/client-jwt-public.pem",
+    "algorithm": "RS256"
+  }
+}

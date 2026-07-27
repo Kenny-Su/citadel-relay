@@ -1,0 +1,41 @@
+services:
+  relay:
+    build:
+      context: .
+    image: citadel-relay:local
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${RELAY_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      RELAY_ADMIN_PASSPHRASE: "${RELAY_ADMIN_PASSPHRASE:?set RELAY_ADMIN_PASSPHRASE in .env}"
+      RELAY_ADMIN_SECURE_COOKIES: "${RELAY_ADMIN_SECURE_COOKIES:-true}"
+      RELAY_TRUST_PROXY: "${RELAY_TRUST_PROXY:-false}"
+      RELAY_TRAFFIC_LOG: "${RELAY_TRAFFIC_LOG:-}"
+    volumes:
+      - relay-data:/data
+      - ./deploy/relay.config.json:/app/config/relay.config.json:ro
+      - ./deploy/client-jwt-public.pem:/run/secrets/client-jwt-public.pem:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - --eval
+        - fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  relay-data:
